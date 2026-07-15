@@ -2243,6 +2243,11 @@ CAmount CWallet::GetBalance(const isminefilter& filter, const int min_depth) con
     return nTotal;
 }
 
+CAmount CWallet::GetWatchOnlyBalance() const
+{
+    return GetBalance(ISMINE_WATCH_ONLY);
+}
+
 CAmount CWallet::GetUnconfirmedBalance() const
 {
     CAmount nTotal = 0;
