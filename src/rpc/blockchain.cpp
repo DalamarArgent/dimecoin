@@ -183,7 +183,11 @@ static UniValue getbestblockhash(const JSONRPCRequest& request)
         );
 
     LOCK(cs_main);
-    return chainActive.Tip()->GetBlockHash().GetHex();
+    const CBlockIndex* tip = chainActive.Tip();
+    if (!tip) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Best block unavailable");
+    }
+    return tip->GetBlockHash().GetHex();
 }
 
 void RPCNotifyBlockChange(bool ibd, const CBlockIndex * pindex)
@@ -350,6 +354,9 @@ static UniValue getdifficulty(const JSONRPCRequest& request)
     LOCK(cs_main);
 
     CBlockIndex* tip = chainActive.Tip();
+    if (!tip) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "No active chain tip available");
+    }
     const Consensus::Params& consensusParams = Params().GetConsensus();
     UniValue obj(UniValue::VOBJ);
     obj.pushKV("proof-of-work",(double)GetDifficulty(GetNextWorkRequired(tip,consensusParams,false)));
@@ -855,7 +862,7 @@ static void ApplyStats(CCoinsStats &stats, CHashWriter& ss, const uint256& hash,
 {
     assert(!outputs.empty());
     ss << hash;
-    ss << VARINT(outputs.begin()->second.nHeight * 2 + outputs.begin()->second.fCoinBase ? 1u : 0u);
+    ss << VARINT(outputs.begin()->second.nHeight * 2 + (outputs.begin()->second.fCoinBase ? 1u : 0u));
     stats.nTransactions++;
     for (const auto& output : outputs) {
         ss << VARINT(output.first + 1);
@@ -1191,15 +1198,15 @@ UniValue getblockchaininfo(const JSONRPCRequest& request)
     obj.pushKV("chain",                 Params().NetworkIDString());
     obj.pushKV("blocks",                (int)chainActive.Height());
     obj.pushKV("headers",               pindexBestHeader ? pindexBestHeader->nHeight : -1);
-    obj.pushKV("bestblockhash",         chainActive.Tip()->GetBlockHash().GetHex());
+    obj.pushKV("bestblockhash",         tip->GetBlockHash().GetHex());
     UniValue diff(UniValue::VOBJ);
     diff.pushKV("proof-of-work",(double)GetDifficulty(GetNextWorkRequired(tip,consensusParams,false)));
     diff.pushKV("proof-of-stake",(double)GetDifficulty(GetNextWorkRequired(tip,consensusParams,true)));
     obj.pushKV("difficulty", diff);
-    obj.pushKV("mediantime",            (int64_t)chainActive.Tip()->GetMedianTimePast());
-    obj.pushKV("verificationprogress",  GuessVerificationProgress(Params().TxData(), chainActive.Tip()));
+    obj.pushKV("mediantime",            (int64_t)tip->GetMedianTimePast());
+    obj.pushKV("verificationprogress",  GuessVerificationProgress(Params().TxData(), tip));
     obj.pushKV("initialblockdownload",  IsInitialBlockDownload());
-    obj.pushKV("chainwork",             chainActive.Tip()->nChainWork.GetHex());
+    obj.pushKV("chainwork",             tip->nChainWork.GetHex());
     obj.pushKV("size_on_disk",          CalculateCurrentUsage());
 
     UniValue softforks(UniValue::VARR);
@@ -1294,7 +1301,9 @@ static UniValue getchaintips(const JSONRPCRequest& request)
     }
 
     // Always report the currently active tip.
-    setTips.insert(chainActive.Tip());
+    if (const CBlockIndex* tip = chainActive.Tip()) {
+        setTips.insert(tip);
+    }
 
     int nBranchMin = -1;
     int nCountMax = INT_MAX;

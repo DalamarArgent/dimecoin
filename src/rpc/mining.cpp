@@ -381,9 +381,14 @@ static UniValue getblocktemplate(const JSONRPCRequest& request)
 
     LOCK(cs_main);
 
+    CBlockIndex* tip = chainActive.Tip();
+    if (!tip) {
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "No active chain tip available");
+    }
+
     //! use the fork height as conditional
     bool newBlocks = false;
-    if (chainActive.Tip()->nHeight >= Params().GetConsensus().nFirstPoSBlock) {
+    if (tip->nHeight >= Params().GetConsensus().nFirstPoSBlock) {
         newBlocks = true;
     }
 
@@ -426,7 +431,10 @@ static UniValue getblocktemplate(const JSONRPCRequest& request)
             }
 
             CBlockIndex* const pindexPrev = chainActive.Tip();
-            // TestBlockValidity only supports blocks built on the current Tip
+            if (!pindexPrev) {
+                return "inconclusive-not-best-prevblk";
+            }
+            // TestBlockValidity only supports blocks built on the current tip
             if (block.hashPrevBlock != pindexPrev->GetBlockHash())
                 return "inconclusive-not-best-prevblk";
             CValidationState state;

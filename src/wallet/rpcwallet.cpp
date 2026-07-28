@@ -106,7 +106,10 @@ static void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry)
     {
         entry.pushKV("blockhash", wtx.hashBlock.GetHex());
         entry.pushKV("blockindex", wtx.nIndex);
-        entry.pushKV("blocktime", LookupBlockIndex(wtx.hashBlock)->GetBlockTime());
+        const CBlockIndex* pindex = LookupBlockIndex(wtx.hashBlock);
+        if (pindex) {
+            entry.pushKV("blocktime", pindex->GetBlockTime());
+        }
     } else {
         entry.pushKV("trusted", wtx.IsTrusted());
     }
@@ -2514,14 +2517,15 @@ static UniValue walletpassphrase(const JSONRPCRequest& request)
         return NullUniValue;
     }
 
-    if (request.fHelp || request.params.size() != 2) {
+    if (request.fHelp || (request.params.size() != 2 && request.params.size() != 3)) {
         throw std::runtime_error(
-                    "walletpassphrase \"passphrase\" timeout\n"
+                    "walletpassphrase \"passphrase\" timeout ( stakingonly )\n"
                     "\nStores the wallet decryption key in memory for 'timeout' seconds.\n"
                     "This is needed prior to performing transactions related to private keys such as sending bitcoins\n"
                     "\nArguments:\n"
                     "1. \"passphrase\"     (string, required) The wallet passphrase\n"
                     "2. timeout            (numeric, required) The time to keep the decryption key in seconds; capped at 100000000 (~3 years).\n"
+                    "3. stakingonly        (boolean, optional, default=false) Unlock for staking only.\n"
                     "\nNote:\n"
                     "Issuing the walletpassphrase command while the wallet is already unlocked will set a new unlock\n"
                     "time that overrides the old one.\n"
