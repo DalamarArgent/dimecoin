@@ -18,6 +18,7 @@
 #include <rpc/server.h>
 #include <util/system.h>
 #include <util/moneystr.h>
+#include <util/strencodings.h>
 #include <key_io.h>
 #include <wallet/coincontrol.h>
 
@@ -399,6 +400,9 @@ static UniValue masternode(const JSONRPCRequest& request)
             LOCK(cs_main);
             pindex = chainActive.Tip();
         }
+        if (!pindex) {
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "No active chain tip available");
+        }
         nHeight = pindex->nHeight + (strCommand == "current" ? 1 : 10);
         mnodeman.UpdateLastPaid(pindex);
 
@@ -603,7 +607,9 @@ static UniValue masternode(const JSONRPCRequest& request)
         std::string strFilter = "";
 
         if (request.params.size() >= 2) {
-            nLast = atoi(request.params[1].get_str());
+            if (!ParseInt32(request.params[1].get_str(), &nLast) || nLast < 1 || nLast > 10000) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid count, expected integer range [1, 10000]");
+            }
         }
 
         if (request.params.size() == 3) {

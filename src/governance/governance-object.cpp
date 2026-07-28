@@ -155,7 +155,7 @@ bool CGovernanceObject::ProcessVote(CNode* pfrom,
     }
 
     int64_t nNow = GetAdjustedTime();
-    int64_t nVoteTimeUpdate = voteInstance.nTime;
+    int64_t nVoteTimeUpdate = nNow;
     if(governance.AreRateChecksEnabled()) {
         int64_t nTimeDelta = nNow - voteInstance.nTime;
         if(nTimeDelta < GOVERNANCE_UPDATE_MIN) {

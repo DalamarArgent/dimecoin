@@ -1319,8 +1319,12 @@ void CWallet::BlockUntilSyncedToCurrentChain() {
         // cs_main here anyway, it's easier to just call it cs_main-protected.
         LOCK(cs_main);
         const CBlockIndex* initialChainTip = chainActive.Tip();
+        if (!initialChainTip || !m_last_block_processed) {
+            return;
+        }
 
-        if (m_last_block_processed->GetAncestor(initialChainTip->nHeight) == initialChainTip) {
+        const CBlockIndex* syncedAncestor = m_last_block_processed->GetAncestor(initialChainTip->nHeight);
+        if (syncedAncestor == initialChainTip) {
             return;
         }
     }
@@ -2245,6 +2249,11 @@ CAmount CWallet::GetImmatureBalance() const
         }
     }
     return nTotal;
+}
+
+CAmount CWallet::GetWatchOnlyBalance() const
+{
+    return GetBalance(ISMINE_WATCH_ONLY);
 }
 
 CAmount CWallet::GetUnconfirmedWatchOnlyBalance() const

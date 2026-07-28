@@ -292,6 +292,11 @@ bool BerkeleyBatch::Recover(const fs::path& file_path, void *callbackDataIn, boo
     }
 
     DbTxn* ptxn = env->TxnBegin();
+    if (!ptxn) {
+        LogPrintf("BerkeleyBatch::Recover: TxnBegin failed for %s\n", filename);
+        pdbCopy->close(0);
+        return false;
+    }
     for (BerkeleyEnvironment::KeyValPair& row : salvagedData)
     {
         if (recoverKVcallback)
@@ -307,7 +312,9 @@ bool BerkeleyBatch::Recover(const fs::path& file_path, void *callbackDataIn, boo
         if (ret2 > 0)
             fSuccess = false;
     }
-    ptxn->commit(0);
+    if (ptxn->commit(0) != 0) {
+        fSuccess = false;
+    }
     pdbCopy->close(0);
 
     return fSuccess;
@@ -604,33 +611,36 @@ bool BerkeleyBatch::Rewrite(BerkeleyDatabase& database, const char* pszSkip)
                     }
 
                     Dbc* pcursor = db.GetCursor();
-                    if (pcursor)
-                        while (fSuccess) {
-                            CDataStream ssKey(SER_DISK, CLIENT_VERSION);
-                            CDataStream ssValue(SER_DISK, CLIENT_VERSION);
-                            int ret1 = db.ReadAtCursor(pcursor, ssKey, ssValue);
-                            if (ret1 == DB_NOTFOUND) {
-                                pcursor->close();
-                                break;
-                            } else if (ret1 != 0) {
-                                pcursor->close();
-                                fSuccess = false;
-                                break;
-                            }
-                            if (pszSkip &&
-                                strncmp(ssKey.data(), pszSkip, std::min(ssKey.size(), strlen(pszSkip))) == 0)
-                                continue;
-                            if (strncmp(ssKey.data(), "\x07version", 8) == 0) {
-                                // Update version:
-                                ssValue.clear();
-                                ssValue << CLIENT_VERSION;
-                            }
-                            Dbt datKey(ssKey.data(), ssKey.size());
-                            Dbt datValue(ssValue.data(), ssValue.size());
-                            int ret2 = pdbCopy->put(nullptr, &datKey, &datValue, DB_NOOVERWRITE);
-                            if (ret2 > 0)
-                                fSuccess = false;
+                    if (!pcursor) {
+                        LogPrintf("BerkeleyBatch::Rewrite: Unable to create cursor for %s\n", strFile);
+                        fSuccess = false;
+                    }
+                    while (pcursor && fSuccess) {
+                        CDataStream ssKey(SER_DISK, CLIENT_VERSION);
+                        CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+                        int ret1 = db.ReadAtCursor(pcursor, ssKey, ssValue);
+                        if (ret1 == DB_NOTFOUND) {
+                            pcursor->close();
+                            break;
+                        } else if (ret1 != 0) {
+                            pcursor->close();
+                            fSuccess = false;
+                            break;
                         }
+                        if (pszSkip &&
+                            strncmp(ssKey.data(), pszSkip, std::min(ssKey.size(), strlen(pszSkip))) == 0)
+                            continue;
+                        if (strncmp(ssKey.data(), "\x07version", 8) == 0) {
+                            // Update version:
+                            ssValue.clear();
+                            ssValue << CLIENT_VERSION;
+                        }
+                        Dbt datKey(ssKey.data(), ssKey.size());
+                        Dbt datValue(ssValue.data(), ssValue.size());
+                        int ret2 = pdbCopy->put(nullptr, &datKey, &datValue, DB_NOOVERWRITE);
+                        if (ret2 > 0)
+                            fSuccess = false;
+                    }
                     if (fSuccess) {
                         db.Close();
                         env->CloseDb(strFile);

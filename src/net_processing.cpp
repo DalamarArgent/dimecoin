@@ -690,9 +690,10 @@ bool GetNodeStateStats(NodeId nodeid, CNodeStateStats &stats) {
 
 static void AddToCompactExtraTransactions(const CTransactionRef& tx) EXCLUSIVE_LOCKS_REQUIRED(g_cs_orphans)
 {
-    size_t max_extra_txn = gArgs.GetArg("-blockreconstructionextratxn", DEFAULT_BLOCK_RECONSTRUCTION_EXTRA_TXN);
-    if (max_extra_txn <= 0)
+    const int64_t max_extra_txn_arg = gArgs.GetArg("-blockreconstructionextratxn", DEFAULT_BLOCK_RECONSTRUCTION_EXTRA_TXN);
+    if (max_extra_txn_arg <= 0)
         return;
+    const size_t max_extra_txn = static_cast<size_t>(max_extra_txn_arg);
     if (!vExtraTxnForCompact.size())
         vExtraTxnForCompact.resize(max_extra_txn);
     vExtraTxnForCompact[vExtraTxnForCompactIt] = std::make_pair(tx->GetWitnessHash(), tx);

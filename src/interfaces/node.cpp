@@ -224,6 +224,9 @@ class NodeImpl : public Node
     bool getUnspentOutput(const COutPoint& output, Coin& coin) override
     {
         LOCK(::cs_main);
+        if (::pcoinsTip == nullptr) {
+            return false;
+        }
         return ::pcoinsTip->GetCoin(output, coin);
     }
     std::vector<std::unique_ptr<Wallet>> getWallets() override
@@ -257,7 +260,11 @@ class NodeImpl : public Node
     std::unique_ptr<Handler> handleLoadWallet(LoadWalletFn fn) override
     {
         CHECK_WALLET(
-            return MakeHandler(::uiInterface.LoadWallet.connect([fn](CWallet* wallet) { fn(MakeWallet(*wallet)); })));
+            return MakeHandler(::uiInterface.LoadWallet.connect([fn](CWallet* wallet) {
+                if (wallet) {
+                    fn(MakeWallet(*wallet));
+                }
+            })));
     }
     std::unique_ptr<Handler> handleNotifyNumConnectionsChanged(NotifyNumConnectionsChangedFn fn) override
     {
@@ -278,6 +285,9 @@ class NodeImpl : public Node
     std::unique_ptr<Handler> handleNotifyBlockTip(NotifyBlockTipFn fn) override
     {
         return MakeHandler(::uiInterface.NotifyBlockTip.connect([fn](bool initial_download, const CBlockIndex* block) {
+            if (block == nullptr) {
+                return;
+            }
             fn(initial_download, block->nHeight, block->GetBlockTime(),
                 GuessVerificationProgress(Params().TxData(), block));
         }));
@@ -286,6 +296,9 @@ class NodeImpl : public Node
     {
         return MakeHandler(
             ::uiInterface.NotifyHeaderTip.connect([fn](bool initial_download, const CBlockIndex* block) {
+                if (block == nullptr) {
+                    return;
+                }
                 fn(initial_download, block->nHeight, block->GetBlockTime(),
                     GuessVerificationProgress(Params().TxData(), block));
             }));

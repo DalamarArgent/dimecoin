@@ -13,6 +13,7 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <algorithm>
 
 
 #define LN2SQUARED 0.4804530139182014246671025263266649717305529515945455
@@ -32,7 +33,7 @@ CBloomFilter::CBloomFilter(const unsigned int nElements, const double nFPRate, c
      */
     isFull(false),
     isEmpty(true),
-    nHashFuncs(std::min((unsigned int)(vData.size() * 8 / nElements * LN2), MAX_HASH_FUNCS)),
+    nHashFuncs(std::min((unsigned int)(vData.size() * 8 / std::max(1U, nElements) * LN2), MAX_HASH_FUNCS)),
     nTweak(nTweakIn),
     nFlags(nFlagsIn)
 {
@@ -43,7 +44,7 @@ CBloomFilter::CBloomFilter(const unsigned int nElements, const double nFPRate, c
     vData((unsigned int)(-1  / LN2SQUARED * nElements * log(nFPRate)) / 8),
     isFull(false),
     isEmpty(true),
-    nHashFuncs((unsigned int)(vData.size() * 8 / nElements * LN2)),
+    nHashFuncs((unsigned int)(vData.size() * 8 / std::max(1U, nElements) * LN2)),
     nTweak(nTweakIn),
     nFlags(BLOOM_UPDATE_NONE)
 {
