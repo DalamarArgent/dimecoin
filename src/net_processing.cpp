@@ -75,6 +75,12 @@ static constexpr int STALE_RELAY_AGE_LIMIT = 30 * 24 * 60 * 60;
 /// Age after which a block is considered historical for purposes of rate
 /// limiting block relay. Set to one week, denominated in seconds.
 static constexpr int HISTORICAL_BLOCK_AGE = 7 * 24 * 60 * 60;
+/** Maximum number of out-of-order blocks (children whose parent is still in flight) buffered in
+ *  mapBlocksUnknownParent. These are fully deserialized blocks pinned in memory, so the map must
+ *  be bounded: a peer that feeds us children and never delivers the parents would otherwise grow
+ *  it without limit. Sized with headroom over the worst-case legitimate backlog, which is capped
+ *  by MAX_BLOCKS_IN_TRANSIT_PER_PEER times the outbound peer count. */
+static constexpr size_t MAX_UNKNOWN_PARENT_BLOCKS = 1024;
 
 struct COrphanTx {
     // When modifying, adapt the copy of this definition in tests/DoS_tests.
@@ -148,7 +154,7 @@ namespace {
     };
     std::map<uint256, std::pair<NodeId, std::list<QueuedBlock>::iterator> > mapBlocksInFlight GUARDED_BY(cs_main);
 
-    static std::map<uint256, std::shared_ptr<CBlock>> mapBlocksUnknownParent;
+    static std::map<uint256, std::shared_ptr<CBlock>> mapBlocksUnknownParent GUARDED_BY(cs_main);
 
     /** Stack of nodes which we have set to announce using compact blocks */
     std::list<NodeId> lNodesAnnouncingHeaderAndIDs GUARDED_BY(cs_main);
@@ -2127,12 +2133,19 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
             if (inv.type == MSG_BLOCK) {
                 UpdateBlockAvailability(pfrom->GetId(), inv.hash);
-                if (!fAlreadyHave && !fImporting && !fReindex && !mapBlocksInFlight.count(inv.hash)) {
+                if (!fAlreadyHave && !fImporting && !fReindex && !mapBlocksInFlight.count(inv.hash) && !IsInitialBlockDownload()) {
                     // We used to request the full block here, but since headers-announcements are now the
                     // primary method of announcement on the network, and since, in the case that a node
                     // fell back to inv we probably have a reorg which we should get the headers for first,
                     // we now only provide a getheaders response here. When we receive the headers, we will
                     // then ask for the blocks we need.
+                    //
+                    // Skipped during IBD: we already have a dedicated header sync peer (the fSyncStarted
+                    // gate in SendMessages allows only one). Answering every tip announcement here starts
+                    // a second, third, ... full header download, because a 2000-header reply re-arms the
+                    // "more getheaders" continuation in ProcessHeadersMessage. With 64s blocks all 8
+                    // outbound peers got pulled in within minutes and each streamed the entire chain -
+                    // measured at ~10x redundant header traffic, crowding out actual block download.
                     connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::GETHEADERS, chainActive.GetLocator(pindexBestHeader), inv.hash));
                     LogPrint(BCLog::NET, "getheaders (%d) %s to peer=%d\n", pindexBestHeader->nHeight, inv.hash.ToString(), pfrom->GetId());
                 }
@@ -2882,23 +2895,45 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
         LogPrint(BCLog::NET, "received block %s peer=%d\n", pblock->GetHash().ToString(), pfrom->GetId());
 
         bool forceProcessing = false;
+        bool fDeferred = false;
         const uint256 hash(pblock->GetHash());
 
-        auto it = mapBlockIndex.find(pblock->hashPrevBlock);
-        if (it != mapBlockIndex.end() && ((it->second->nStatus & BLOCK_HAVE_DATA) == 0))
         {
-            LogPrint(BCLog::NET, "Received block out of order: %s\n", pblock->GetHash().ToString());
-            if (mapBlocksInFlight.count(pblock->hashPrevBlock))
+            // cs_main must cover the mapBlockIndex / mapBlocksInFlight reads *and* the
+            // mapBlocksUnknownParent insert below. If the lock is only taken after the checks,
+            // the parent can arrive on another thread in between and drain its child queue,
+            // which strands this block in mapBlocksUnknownParent forever - and leaves it in
+            // mapBlocksInFlight until the peer is dropped on the download timeout.
+            LOCK(cs_main);
+
+            auto itPrev = mapBlockIndex.find(pblock->hashPrevBlock);
+            const bool fParentDataMissing = itPrev != mapBlockIndex.end() &&
+                                            (itPrev->second->nStatus & BLOCK_HAVE_DATA) == 0;
+
+            if (fParentDataMissing && mapBlocksInFlight.count(pblock->hashPrevBlock))
             {
-                LOCK(cs_main);
-                mapBlocksUnknownParent.insert(std::make_pair(pblock->hashPrevBlock, pblock));
-                MarkBlockAsReceived(pblock->hashPrevBlock); // invalidate to send again.
+                LogPrint(BCLog::NET, "Received block out of order: %s\n", hash.ToString());
+                if (mapBlocksUnknownParent.size() < MAX_UNKNOWN_PARENT_BLOCKS) {
+                    mapBlocksUnknownParent.emplace(pblock->hashPrevBlock, pblock);
+                    fDeferred = true;
+                    // NOTE: do NOT MarkBlockAsReceived(hashPrevBlock) here. The parent is still in
+                    // flight (that is the condition we just tested, now atomically) and will arrive
+                    // on its own, at which point the queue below drains this child. Clearing it from
+                    // mapBlocksInFlight makes FindNextBlocksToDownload re-request a block that is
+                    // already on the wire, which multiplied IBD traffic ~19x once the download
+                    // window was widened enough for out-of-order arrival to become the norm.
+                } else {
+                    // Buffer is full: drop the child rather than pin unbounded memory. Clearing its
+                    // in-flight entry lets FindNextBlocksToDownload re-request it once the backlog
+                    // drains, instead of stalling the peer until the download timeout fires.
+                    LogPrint(BCLog::NET, "Dropping out-of-order block %s: mapBlocksUnknownParent full (%u entries)\n",
+                             hash.ToString(), (unsigned)mapBlocksUnknownParent.size());
+                    MarkBlockAsReceived(hash);
+                    return true;
+                }
             }
-        }
-        else
-        {
-            {
-                LOCK(cs_main);
+
+            if (!fDeferred) {
                 // Also always process if we requested the block explicitly, as we may
                 // need it even though it is not a candidate for a new best tip.
                 forceProcessing |= MarkBlockAsReceived(hash);
@@ -2906,7 +2941,10 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
                 // so the race between here and cs_main in ProcessNewBlock is fine.
                 mapBlockSource.emplace(hash, std::make_pair(pfrom->GetId(), true));
             }
+        }
 
+        if (!fDeferred)
+        {
             bool fNewBlock = false;
             ProcessNewBlock(chainparams, pblock, forceProcessing, &fNewBlock);
             if (fNewBlock)
@@ -2919,28 +2957,29 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
                 {
                     uint256 head = queue.front();
                     queue.pop_front();
-                    auto it = mapBlocksUnknownParent.find(head);
-                    if (it != std::end(mapBlocksUnknownParent))
-                    {
-                        std::shared_ptr<CBlock> pblockrecursive = it->second;
-                        auto recursiveHash = pblockrecursive->GetHash();
-                        LogPrint(BCLog::NET, "%s: Processing out of order child %s of %s\n", __func__, recursiveHash.ToString(),
-                                 head.ToString());
 
-                        bool forceProcessing = false;
-                        {
-                            LOCK(cs_main);
-                            mapBlocksUnknownParent.erase(it);
-                            forceProcessing = MarkBlockAsReceived(recursiveHash);
-                        }
-                        ProcessNewBlock(chainparams, pblockrecursive, forceProcessing, &fNewBlock);
-                        queue.push_back(recursiveHash);
+                    std::shared_ptr<CBlock> pblockrecursive;
+                    uint256 recursiveHash;
+                    bool forceProcessingChild = false;
+                    {
+                        LOCK(cs_main);
+                        auto itChild = mapBlocksUnknownParent.find(head);
+                        if (itChild == mapBlocksUnknownParent.end()) continue;
+                        pblockrecursive = itChild->second;
+                        recursiveHash = pblockrecursive->GetHash();
+                        mapBlocksUnknownParent.erase(itChild);
+                        forceProcessingChild = MarkBlockAsReceived(recursiveHash);
                     }
+
+                    LogPrint(BCLog::NET, "%s: Processing out of order child %s of %s\n", __func__,
+                             recursiveHash.ToString(), head.ToString());
+                    ProcessNewBlock(chainparams, pblockrecursive, forceProcessingChild, &fNewBlock);
+                    queue.push_back(recursiveHash);
                 }
             }
             else {
                 LOCK(cs_main);
-                mapBlockSource.erase(pblock->GetHash());
+                mapBlockSource.erase(hash);
             }
         }
         return true;

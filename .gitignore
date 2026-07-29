@@ -55,6 +55,7 @@ src/qt/bitcoin-qt.includes
 .libs
 .*.swp
 *.*~*
+*~
 *.bak
 *.rej
 *.orig

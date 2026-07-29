@@ -9,6 +9,14 @@
 #include <key.h>
 #include <script/standard.h>
 
+/** Accept masternode-layer signatures made under the legacy "DarkCoin"/"Dimecoin" message magic
+ *  in addition to the currently configured strMessageMagic.
+ *
+ *  This is migration scaffolding, not a permanent feature. Removal criteria: once a full release
+ *  cycle passes with no "accepted N signature(s) using a legacy message magic" warning in
+ *  debug.log, drop the fallback, this option, and CMessageSigner::GetLegacyMagicAcceptCount(). */
+static const bool DEFAULT_LEGACY_SIG_MAGIC = true;
+
 /** Helper class for signing messages and checking their signatures
  */
 class CMessageSigner
@@ -20,6 +28,9 @@ public:
     static bool SignMessage(const std::string strMessage, std::vector<unsigned char>& vchSigRet, const CKey key);
     /// Verify the message signature, returns true if succcessful
     static bool VerifyMessage(const CPubKey pubkey, const std::vector<unsigned char>& vchSig, const std::string strMessage, std::string& strErrorRet);
+    /// How many signatures have only verified under a legacy magic string. Zero over a full
+    /// release cycle is the signal that the fallback above can be removed.
+    static int64_t GetLegacyMagicAcceptCount();
 };
 
 /** Helper class for signing hashes and checking their signatures
