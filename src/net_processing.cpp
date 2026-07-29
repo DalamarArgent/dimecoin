@@ -2126,12 +2126,19 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
             if (inv.type == MSG_BLOCK) {
                 UpdateBlockAvailability(pfrom->GetId(), inv.hash);
-                if (!fAlreadyHave && !fImporting && !fReindex && !mapBlocksInFlight.count(inv.hash)) {
+                if (!fAlreadyHave && !fImporting && !fReindex && !mapBlocksInFlight.count(inv.hash) && !IsInitialBlockDownload()) {
                     // We used to request the full block here, but since headers-announcements are now the
                     // primary method of announcement on the network, and since, in the case that a node
                     // fell back to inv we probably have a reorg which we should get the headers for first,
                     // we now only provide a getheaders response here. When we receive the headers, we will
                     // then ask for the blocks we need.
+                    //
+                    // Skipped during IBD: we already have a dedicated header sync peer (the fSyncStarted
+                    // gate in SendMessages allows only one). Answering every tip announcement here starts
+                    // a second, third, ... full header download, because a 2000-header reply re-arms the
+                    // "more getheaders" continuation in ProcessHeadersMessage. With 64s blocks all 8
+                    // outbound peers got pulled in within minutes and each streamed the entire chain -
+                    // measured at ~10x redundant header traffic, crowding out actual block download.
                     connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::GETHEADERS, chainActive.GetLocator(pindexBestHeader), inv.hash));
                     LogPrint(BCLog::NET, "getheaders (%d) %s to peer=%d\n", pindexBestHeader->nHeight, inv.hash.ToString(), pfrom->GetId());
                 }
@@ -2891,7 +2898,12 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
             {
                 LOCK(cs_main);
                 mapBlocksUnknownParent.insert(std::make_pair(pblock->hashPrevBlock, pblock));
-                MarkBlockAsReceived(pblock->hashPrevBlock); // invalidate to send again.
+                // NOTE: do NOT MarkBlockAsReceived(hashPrevBlock) here. The parent is still in
+                // flight (that is the condition we just tested) and will arrive on its own, at
+                // which point the queue below drains this child. Clearing it from
+                // mapBlocksInFlight makes FindNextBlocksToDownload re-request a block that is
+                // already on the wire, which multiplied IBD traffic ~19x once the download
+                // window was widened enough for out-of-order arrival to become the norm.
             }
         }
         else
