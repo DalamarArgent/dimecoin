@@ -191,16 +191,16 @@ void CMasternodePayments::ProcessMessage(CNode* pfrom, const std::string& strCom
 
         {
             LOCK(cs_mapMasternodePaymentVotes);
-            if(mapMasternodePaymentVotes.count(nHash)) {
+            auto it = mapMasternodePaymentVotes.find(nHash);
+            if(it != mapMasternodePaymentVotes.end() && it->second.IsVerified()) {
                 LogPrint(BCLog::MNPAYMENTS, "MASTERNODEPAYMENTVOTE -- hash=%s, nHeight=%d seen\n", nHash.ToString(), nCachedBlockHeight);
                 return;
             }
 
-            // Avoid processing same vote multiple times
-            mapMasternodePaymentVotes[nHash] = vote;
-            // but first mark vote as non-verified,
-            // AddPaymentVote() below should take care of it if vote is actually ok
-            mapMasternodePaymentVotes[nHash].MarkAsNotVerified();
+            // If we have a stale non-verified placeholder, drop it and retry full validation.
+            if(it != mapMasternodePaymentVotes.end()) {
+                mapMasternodePaymentVotes.erase(it);
+            }
         }
 
         int nFirstBlock = nCachedBlockHeight - GetStorageLimit();

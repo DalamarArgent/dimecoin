@@ -10,6 +10,21 @@
 #include <tinyformat.h>
 #include <util/strencodings.h>
 
+namespace {
+bool VerifyMessageWithMagic(const CPubKey pubkey,
+                            const std::vector<unsigned char>& vchSig,
+                            const std::string& strMessage,
+                            const std::string& strMagic,
+                            std::string& strErrorRet)
+{
+    CHashWriter ss(SER_GETHASH, 0);
+    ss << strMagic;
+    ss << strMessage;
+
+    return CHashSigner::VerifyHash(ss.GetHash(), pubkey, vchSig, strErrorRet);
+}
+} // namespace
+
 bool CMessageSigner::GetKeysFromSecret(const std::string strSecret, CKey& keyRet, CPubKey& pubkeyRet)
 {
     keyRet = DecodeSecret(strSecret);
@@ -31,11 +46,26 @@ bool CMessageSigner::SignMessage(const std::string strMessage, std::vector<unsig
 
 bool CMessageSigner::VerifyMessage(const CPubKey pubkey, const std::vector<unsigned char>& vchSig, const std::string strMessage, std::string& strErrorRet)
 {
-    CHashWriter ss(SER_GETHASH, 0);
-    ss << strMessageMagic;
-    ss << strMessage;
+    if (VerifyMessageWithMagic(pubkey, vchSig, strMessage, strMessageMagic, strErrorRet)) {
+        return true;
+    }
 
-    return CHashSigner::VerifyHash(ss.GetHash(), pubkey, vchSig, strErrorRet);
+    // Compatibility fallback for mixed networks that still sign with older magic.
+    const std::string kAltMagic1 = "DarkCoin Signed Message:\n";
+    const std::string kAltMagic2 = "Dimecoin Signed Message:\n";
+
+    const std::string primaryError = strErrorRet;
+    std::string altError;
+
+    if (strMessageMagic != kAltMagic1 && VerifyMessageWithMagic(pubkey, vchSig, strMessage, kAltMagic1, altError)) {
+        return true;
+    }
+    if (strMessageMagic != kAltMagic2 && VerifyMessageWithMagic(pubkey, vchSig, strMessage, kAltMagic2, altError)) {
+        return true;
+    }
+
+    strErrorRet = primaryError;
+    return false;
 }
 
 bool CHashSigner::SignHash(const uint256& hash, const CKey key, std::vector<unsigned char>& vchSigRet)
