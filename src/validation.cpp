@@ -4105,10 +4105,22 @@ bool static LoadBlockIndexDB(const CChainParams& chainparams)
     }
 
     // Load hashSyncCheckpoint
-    if (!pblocktree->ReadSyncCheckpoint(hashSyncCheckpoint))
+    // ReadSyncCheckpoint() leaves its out-param untouched when the key is absent, so
+    // clear it first: otherwise a value left over from an earlier load pass survives a
+    // block-database rebuild and ends up naming a CBlockIndex that no longer exists.
+    hashSyncCheckpoint = uint256();
+    if (!pblocktree->ReadSyncCheckpoint(hashSyncCheckpoint)) {
+         hashSyncCheckpoint = uint256();
          LogPrintf("LoadBlockIndexDB(): synchronized checkpoint not read\n");
-    else
+    } else if (!hashSyncCheckpoint.IsNull() && !mapBlockIndex.count(hashSyncCheckpoint)) {
+         // Persisted checkpoint refers to a block we no longer have. Fall back to
+         // genesis so later checks cannot trip over a dangling reference.
+         LogPrintf("LoadBlockIndexDB(): synchronized checkpoint %s not found in block index, resetting to genesis\n", hashSyncCheckpoint.ToString());
+         if (!WriteSyncCheckpoint(chainparams.GetConsensus().hashGenesisBlock))
+             LogPrintf("LoadBlockIndexDB(): failed to reset synchronized checkpoint to genesis block\n");
+    } else {
          LogPrintf("LoadBlockIndexDB(): synchronized checkpoint %s\n", hashSyncCheckpoint.ToString().c_str());
+    }
 
     // Check presence of blk files
     LogPrintf("Checking all blk files are present...\n");
@@ -4489,6 +4501,11 @@ void UnloadBlockIndex()
         delete entry.second;
     }
     mapBlockIndex.clear();
+
+    // The sync-checkpoint caches hashes into mapBlockIndex; drop them alongside it or
+    // they will dangle if the index is reloaded in-process (the -reindex retry loop
+    // in AppInitMain does exactly that).
+    UnloadSyncCheckpoint();
 
     g_chainstate.UnloadBlockIndex();
 }

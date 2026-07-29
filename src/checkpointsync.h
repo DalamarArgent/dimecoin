@@ -24,6 +24,7 @@ extern CSyncCheckpoint checkpointMessage;
 extern CCriticalSection cs_hashSyncCheckpoint;
 
 bool WriteSyncCheckpoint(const uint256& hashCheckpoint);
+void UnloadSyncCheckpoint();
 bool AcceptPendingSyncCheckpoint();
 uint256 AutoSelectSyncCheckpoint();
 bool CheckSyncCheckpoint(const uint256 hashBlock, const int nHeight, const CBlockIndex* pindexPrev = nullptr);
