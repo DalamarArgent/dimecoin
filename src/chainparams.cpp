@@ -345,7 +345,12 @@ public:
         consensus.BIP65Height = consensus.nFirstPoSBlock;
         consensus.BIP66Height = consensus.nFirstPoSBlock;
         consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.posLimit = consensus.powLimit;
+        // Deliberately lower than powLimit. CheckStakeKernelHash() compares the kernel
+        // hash against bnCoinDayWeight * bnTargetPerCoinDay, and that product overflows
+        // arith_uint256 if the target is near the top of the range, which wraps it to a
+        // tiny value and makes staking impossible. Keeping posLimit at 2^212 leaves room
+        // for the coin-day weight while still making stakes trivial to find.
+        consensus.posLimit = uint256S("00000000000fffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 65536; //! this is a worry
         consensus.nPowTargetSpacing = 64;     //! this is a worry
         consensus.nPosTargetSpacing = consensus.nPowTargetSpacing;
@@ -362,8 +367,8 @@ public:
         consensus.nCoinbaseMaturity = 15;
         consensus.fullSplitDiffHeight = 0;
 
-        consensus.fPowAllowMinDifficultyBlocks = false;
-        consensus.fPowNoRetargeting = false;
+        consensus.fPowAllowMinDifficultyBlocks = true;
+        consensus.fPowNoRetargeting = true;
         consensus.nRuleChangeActivationThreshold = 1080;
         consensus.nMinerConfirmationWindow = 1440;
 
@@ -396,7 +401,7 @@ public:
         pchMessageStart[1] = 0x92;
         pchMessageStart[2] = 0x30;
         pchMessageStart[3] = 0x39;
-        nDefaultPort = 21931;
+        nDefaultPort = 31931;
         nPruneAfterHeight = 100000;
         nMaxReorganizationDepth = 100;
 
@@ -415,12 +420,12 @@ public:
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xAD, 0xE4};
         bech32_hrp = "vx";
 
-        vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_test, pnSeed6_test + ARRAYLEN(pnSeed6_test));
+        vFixedSeeds.clear();
 
-        fMiningRequiresPeers = true;
-        fDefaultConsistencyChecks = false;
-        fRequireStandard = true;
-        fMineBlocksOnDemand = false;
+        fMiningRequiresPeers = false;
+        fDefaultConsistencyChecks = true;
+        fRequireStandard = false;
+        fMineBlocksOnDemand = true;
         nCollateralLevels = { 100000 };
         nPoolMaxTransactions = 3;
         nFulfilledRequestExpireTime = 60*60;

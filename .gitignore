@@ -111,6 +111,9 @@ win32-build
 test/config.ini
 test/cache/*
 
+# QA suite output: timestamped HTML reports are local run artifacts
+test/qa-reports/
+
 !src/leveldb*/Makefile
 
 /doc/doxygen/

@@ -632,8 +632,8 @@ BOOST_AUTO_TEST_CASE(util_FormatMoney)
     BOOST_CHECK_EQUAL(FormatMoney(COIN*100), "100.00");
     BOOST_CHECK_EQUAL(FormatMoney(COIN*10), "10.00");
     BOOST_CHECK_EQUAL(FormatMoney(COIN), "1.00");
-    BOOST_CHECK_EQUAL(FormatMoney(COIN/10), "0.0001");
-    BOOST_CHECK_EQUAL(FormatMoney(COIN/100), "0.00001");
+    BOOST_CHECK_EQUAL(FormatMoney(COIN/10), "0.10");
+    BOOST_CHECK_EQUAL(FormatMoney(COIN/100), "0.01");
 }
 
 BOOST_AUTO_TEST_CASE(util_ParseMoney)
