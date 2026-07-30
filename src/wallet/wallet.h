@@ -927,6 +927,8 @@ public:
     //! Adds a key to the store, and saves it to disk.
     bool AddKeyPubKey(const CKey& key, const CPubKey &pubkey) override;
     bool AddKeyPubKeyWithDB(WalletBatch &batch,const CKey& key, const CPubKey &pubkey);
+    //! Drop a key from the in-memory keystore again after it failed to reach disk.
+    void ForgetKeyInMemory(const CKeyID& keyid);
     //! GetPubKey implementation that also checks the mapHdPubKeys
     bool GetPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     //! GetKey implementation that can derive a HD private key on the fly

@@ -840,7 +840,7 @@ static UniValue masternodebroadcast(const JSONRPCRequest& request)
                 resultObj.push_back(Pair("addr", mnb.addr.ToString()));
                 resultObj.push_back(Pair("pubKeyCollateralAddress", mnb.pubKeyCollateralAddress.GetID().ToString()));
                 resultObj.push_back(Pair("pubKeyMasternode", mnb.pubKeyMasternode.GetID().ToString()));
-                resultObj.push_back(Pair("vchSig", EncodeBase64(&mnb.vchSig[0], mnb.vchSig.size())));
+                resultObj.push_back(Pair("vchSig", EncodeBase64(mnb.vchSig.data(), mnb.vchSig.size())));
                 resultObj.push_back(Pair("sigTime", mnb.sigTime));
                 resultObj.push_back(Pair("protocolVersion", mnb.nProtocolVersion));
                 resultObj.push_back(Pair("nLastDsq", mnb.nLastDsq));
@@ -849,7 +849,7 @@ static UniValue masternodebroadcast(const JSONRPCRequest& request)
                 lastPingObj.push_back(Pair("outpoint", mnb.lastPing.vin.prevout.ToString()));
                 lastPingObj.push_back(Pair("blockHash", mnb.lastPing.blockHash.ToString()));
                 lastPingObj.push_back(Pair("sigTime", mnb.lastPing.sigTime));
-                lastPingObj.push_back(Pair("vchSig", EncodeBase64(&mnb.lastPing.vchSig[0], mnb.lastPing.vchSig.size())));
+                lastPingObj.push_back(Pair("vchSig", EncodeBase64(mnb.lastPing.vchSig.data(), mnb.lastPing.vchSig.size())));
 
                 resultObj.push_back(Pair("lastPing", lastPingObj));
             } else {

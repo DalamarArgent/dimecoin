@@ -560,6 +560,8 @@ void SetupServerArgs()
     gArgs.AddArg("-maxtxfee=<amt>", strprintf("Maximum total fees (in %s) to use in a single wallet transaction or raw transaction; setting this too low may abort large transactions (default: %s)",
         CURRENCY_UNIT, FormatMoney(DEFAULT_TRANSACTION_MAXFEE)), false, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg("-printpriority", strprintf("Log transaction fee per kB when mining blocks (default: %u)", DEFAULT_PRINTPRIORITY), true, OptionsCategory::DEBUG_TEST);
+    gArgs.AddArg("-printcoinstake", "Log the coinstake transactions considered while staking (requires -debug, default: 0)", true, OptionsCategory::DEBUG_TEST);
+    gArgs.AddArg("-printstakemodifier", "Log stake modifier computation (default: 0)", true, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg("-printtoconsole", "Send trace/debug info to console (default: 1 when no -daemon. To disable logging to file, set -nodebuglogfile)", false, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg("-shrinkdebugfile", "Shrink debug.log file on client startup (default: 1 when no -debug)", false, OptionsCategory::DEBUG_TEST);
     gArgs.AddArg("-uacomment=<cmt>", "Append comment to the user agent string", false, OptionsCategory::DEBUG_TEST);
@@ -604,6 +606,10 @@ void SetupServerArgs()
     gArgs.AddArg("-mnconflock=<n>", "Lock masternodes from masternode configuration file (default: %u)", false, OptionsCategory::MASTERNODE);
     gArgs.AddArg("-masternodeprivkey=<n>", "Set the masternode private key", false, OptionsCategory::MASTERNODE);
     gArgs.AddArg("-clearmncache", "Clears mncache on startup", false, OptionsCategory::MASTERNODE);
+    gArgs.AddArg("-litemode", "Disable all Dimecoin specific functionality - masternodes, InstantSend, governance (0-1, default: 0)", false, OptionsCategory::MASTERNODE);
+    gArgs.AddArg("-enableinstantsend", strprintf("Enable InstantSend, show confirmations for locked transactions (0-1, default: %u)", 1), false, OptionsCategory::MASTERNODE);
+    gArgs.AddArg("-instantsenddepth=<n>", strprintf("Show N confirmations for a successfully locked transaction (0-60, default: %u)", DEFAULT_INSTANTSEND_DEPTH), false, OptionsCategory::MASTERNODE);
+    gArgs.AddArg("-instantsendnotify=<cmd>", "Execute command when a wallet InstantSend transaction is successfully locked (%s in cmd is replaced by TxID)", false, OptionsCategory::MASTERNODE);
 
     gArgs.AddArg("-checkpointdepth", "Set block depth to checkpoint", false, OptionsCategory::CHECKPOINTING);
     gArgs.AddArg("-checkpointkey", "Set private key to sign checkpoint messages", false, OptionsCategory::CHECKPOINTING);

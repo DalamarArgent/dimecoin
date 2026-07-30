@@ -250,6 +250,14 @@ bool CWallet::AddKeyPubKeyWithDB(WalletBatch &batch, const CKey& secret, const C
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
 
+    // Both storage paths below put the key in the in-memory keystore before it
+    // reaches the wallet file. If the write then fails we must undo that,
+    // otherwise HaveKey keeps reporting a key that is not persisted: the caller
+    // sees the failure but a retry is refused as "already have that key", and
+    // the key is gone on the next restart. Only roll back keys this call
+    // introduced, so re-adding an existing key can never drop it.
+    const bool had_key = HaveKey(pubkey.GetID());
+
     // CCryptoKeyStore has no concept of wallet databases, but calls AddCryptedKey
     // which is overridden below.  To avoid flushes, the database handle is
     // tunneled through to it.
@@ -259,6 +267,7 @@ bool CWallet::AddKeyPubKeyWithDB(WalletBatch &batch, const CKey& secret, const C
     }
     if (!CCryptoKeyStore::AddKeyPubKey(secret, pubkey)) {
         if (needsDB) encrypted_batch = nullptr;
+        if (!had_key) ForgetKeyInMemory(pubkey.GetID());
         return false;
     }
     if (needsDB) encrypted_batch = nullptr;
@@ -275,11 +284,21 @@ bool CWallet::AddKeyPubKeyWithDB(WalletBatch &batch, const CKey& secret, const C
     }
 
     if (!IsCrypted()) {
-        return batch.WriteKey(pubkey,
-                              secret.GetPrivKey(),
-                              mapKeyMetadata[pubkey.GetID()]);
+        if (!batch.WriteKey(pubkey,
+                            secret.GetPrivKey(),
+                            mapKeyMetadata[pubkey.GetID()])) {
+            if (!had_key) ForgetKeyInMemory(pubkey.GetID());
+            return false;
+        }
     }
     return true;
+}
+
+void CWallet::ForgetKeyInMemory(const CKeyID& keyid)
+{
+    LOCK(cs_KeyStore);
+    mapKeys.erase(keyid);
+    mapCryptedKeys.erase(keyid);
 }
 
 bool CWallet::AddKeyPubKey(const CKey& secret, const CPubKey &pubkey)

@@ -4339,7 +4339,7 @@ static const CRPCCommand commands[] =
   { "wallet",             "lockunspent",                      &lockunspent,                   {"unlock","transactions"} },
   { "wallet",             "sendfrom",                         &sendfrom,                      {"fromaccount","toaddress","amount","minconf","comment","comment_to"} },
   { "wallet",             "sendmany",                         &sendmany,                      {"fromaccount|dummy","amounts","minconf","comment","subtractfeefrom","replaceable","conf_target","estimate_mode"} },
-  { "wallet",             "sendtoaddress",                    &sendtoaddress,                 {"address","amount","comment","comment_to","subtractfeefromamount","replaceable","conf_target","estimate_mode"} },
+  { "wallet",             "sendtoaddress",                    &sendtoaddress,                 {"address","amount","comment","comment_to","amount_of_splits","subtractfeefromamount","replaceable","conf_target","estimate_mode"} },
   { "wallet",             "settxfee",                         &settxfee,                      {"amount"} },
   { "wallet",             "signmessage",                      &signmessage,                   {"address","message"} },
   { "wallet",             "signrawtransactionwithwallet",     &signrawtransactionwithwallet,  {"hexstring","prevtxs","sighashtype"} },
@@ -4348,7 +4348,7 @@ static const CRPCCommand commands[] =
   { "wallet",             "walletpassphrase",                 &walletpassphrase,              {"passphrase","timeout","stakingonly"} },
   { "wallet",             "removeprunedfunds",                &removeprunedfunds,             {"txid"} },
   { "wallet",             "rescanblockchain",                 &rescanblockchain,              {"start_height", "stop_height"} },
-  { "wallet",             "setstakesplitthreshold",           &setstakesplitthreshold,        {"threshold_amount"}},
+  { "wallet",             "setstakesplitthreshold",           &setstakesplitthreshold,        {"value"}},
   { "wallet",             "getstakesplitthreshold",           &getstakesplitthreshold,        {} },
   { "wallet",             "listminting",                      &listminting,                   {"count", "from"} },
   /** Account functions (deprecated) */

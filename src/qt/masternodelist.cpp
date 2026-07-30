@@ -112,6 +112,7 @@ void MasternodeList::showContextMenu(const QPoint &point)
 
 void MasternodeList::StartAlias(std::string strAlias)
 {
+    if (!walletModel) return;
     std::string strStatusHtml;
     strStatusHtml += "<center>Alias: " + strAlias;
 
@@ -144,6 +145,7 @@ void MasternodeList::StartAlias(std::string strAlias)
 
 void MasternodeList::StartAll(std::string strCommand)
 {
+    if (!walletModel) return;
     int nCountSuccessful = 0;
     int nCountFailed = 0;
     std::string strFailedHtml;
@@ -337,6 +339,7 @@ void MasternodeList::on_filterLineEdit_textChanged(const QString &strFilterIn)
 
 void MasternodeList::on_startButton_clicked()
 {
+    if (!walletModel) return;
     std::string strAlias;
     {
         LOCK(cs_mymnlist);
@@ -375,6 +378,7 @@ void MasternodeList::on_startButton_clicked()
 
 void MasternodeList::on_startAllButton_clicked()
 {
+    if (!walletModel) return;
     // Display message box
     QMessageBox::StandardButton retval = QMessageBox::question(this, tr("Confirm all masternodes start"),
         tr("Are you sure you want to start ALL masternodes?"),
@@ -399,6 +403,7 @@ void MasternodeList::on_startAllButton_clicked()
 
 void MasternodeList::on_startMissingButton_clicked()
 {
+    if (!walletModel) return;
 
     if(!masternodeSync.IsMasternodeListSynced()) {
         QMessageBox::critical(this, tr("Command is not available right now"),

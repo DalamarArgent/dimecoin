@@ -1050,7 +1050,7 @@ static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         argNames
   //  --------------------- ------------------------  -----------------------  ----------
   { "governance",             "gobject",       &gobject,       {"command"} },
-  { "governance",             "voteraw",          &voteraw,          {} },
+  { "governance",             "voteraw",          &voteraw,          {"masternode_tx_hash","masternode_tx_index","governance_hash","vote_signal","vote_outcome","time","vote_sig"} },
   { "governance",             "getgovernanceinfo",  &getgovernanceinfo,  {} },
   { "governance",             "getsuperblockbudget",       &getsuperblockbudget,       {"index"} },
 };
