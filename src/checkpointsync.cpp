@@ -58,9 +58,9 @@
 // Synchronized checkpoint (centrally broadcasted)
 std::string CSyncCheckpoint::strMasterPrivKey;
 uint256 hashSyncCheckpoint;
-static uint256 hashPendingCheckpoint;
+static uint256 hashPendingCheckpoint GUARDED_BY(cs_hashSyncCheckpoint);
 CSyncCheckpoint checkpointMessage;
-static CSyncCheckpoint checkpointMessagePending;
+static CSyncCheckpoint checkpointMessagePending GUARDED_BY(cs_hashSyncCheckpoint);
 CCriticalSection cs_hashSyncCheckpoint;
 
 // Drop every piece of cached sync-checkpoint state.
@@ -158,12 +158,21 @@ bool AcceptPendingSyncCheckpoint()
 
         // Re-resolve under the lock we are about to act on: the pending hash may have
         // been cleared or replaced while ValidateSyncCheckpoint() ran unlocked.
-        CBlockIndex* pindexPending = LookupBlockIndex(hashPendingCheckpoint);
+        //
+        // Commit only the hash that was actually validated. Re-reading the global here
+        // would allow a checkpoint that arrived during the validation window to be
+        // written on the strength of the previous one's validation, and would also pair
+        // it with the wrong checkpointMessagePending. If it changed, bail out and let
+        // the next call validate the new pending checkpoint on its own merits.
+        if (hashPendingCheckpoint != hashPendingCheckpointTmp)
+            return false;
+
+        CBlockIndex* pindexPending = LookupBlockIndex(hashPendingCheckpointTmp);
         if (!pindexPending || !chainActive.Contains(pindexPending))
             return false;
 
-        if (!WriteSyncCheckpoint(hashPendingCheckpoint)) {
-            return error("%s: failed to write sync checkpoint %s", __func__, hashPendingCheckpoint.ToString());
+        if (!WriteSyncCheckpoint(hashPendingCheckpointTmp)) {
+            return error("%s: failed to write sync checkpoint %s", __func__, hashPendingCheckpointTmp.ToString());
         }
 
         hashPendingCheckpoint = uint256();

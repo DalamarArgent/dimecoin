@@ -630,7 +630,7 @@ bool BerkeleyBatch::Rewrite(BerkeleyDatabase& database, const char* pszSkip)
                         if (pszSkip &&
                             strncmp(ssKey.data(), pszSkip, std::min(ssKey.size(), strlen(pszSkip))) == 0)
                             continue;
-                        if (strncmp(ssKey.data(), "\x07version", 8) == 0) {
+                        if (ssKey.size() >= 8 && strncmp(ssKey.data(), "\x07version", 8) == 0) {
                             // Update version:
                             ssValue.clear();
                             ssValue << CLIENT_VERSION;

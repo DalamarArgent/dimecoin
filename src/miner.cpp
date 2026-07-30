@@ -772,9 +772,16 @@ void GenerateBitcoins(bool fGenerate, int nThreads, const CChainParams& chainpar
     if (nThreads == 0 || !fGenerate)
         return;
 
+    auto vpwalletsMine = GetWallets();
+    CWallet* const pwalletMine = vpwalletsMine.empty() ? nullptr : vpwalletsMine.front();
+    if (!pwalletMine) {
+        LogPrintf("GenerateDimecoins: no wallet loaded, not starting miner threads\n");
+        return;
+    }
+
     minerThreads = new boost::thread_group();
     for (int i = 0; i < nThreads; i++)
-        minerThreads->create_thread(boost::bind(&BitcoinMiner, boost::cref(chainparams), boost::ref(connman), GetWallets().front(), false));
+        minerThreads->create_thread(boost::bind(&BitcoinMiner, boost::cref(chainparams), boost::ref(connman), pwalletMine, false));
 }
 
 void ThreadStakeMinter(const CChainParams &chainparams, CConnman &connman, CWallet *pwallet)

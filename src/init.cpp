@@ -1328,7 +1328,8 @@ bool AppInitPrivateSend()
 #ifdef ENABLE_WALLET
     LogPrintf("Using masternode config file %s\n", GetMasternodeConfigFile().string());
 
-    auto pwalletMain = GetWallets().at(0);
+    auto vpwalletsMain = GetWallets();
+    CWallet* const pwalletMain = vpwalletsMain.empty() ? nullptr : vpwalletsMain.front();
 
     if(gArgs.GetBoolArg("-mnconflock", true) && pwalletMain && (masternodeConfig.getCount() > 0)) {
         LOCK(pwalletMain->cs_wallet);
@@ -1337,8 +1338,11 @@ bool AppInitPrivateSend()
         int outputIndex;
         for(CMasternodeConfig::CMasternodeEntry mne : masternodeConfig.getEntries()) {
             mnTxHash.SetHex(mne.getTxHash());
-            outputIndex = boost::lexical_cast<unsigned int>(mne.getOutputIndex());
-            COutPoint outpoint = COutPoint(mnTxHash, outputIndex);
+            if(!ParseInt32(mne.getOutputIndex(), &outputIndex) || outputIndex < 0) {
+                LogPrintf("  %s %s - INVALID OUTPUT INDEX, was not locked\n", mne.getTxHash(), mne.getOutputIndex());
+                continue;
+            }
+            COutPoint outpoint = COutPoint(mnTxHash, (uint32_t)outputIndex);
             // don't lock non-spendable outpoint (i.e. it's already spent or it's not from this wallet at all)
             if(pwalletMain->IsMine(CTxIn(outpoint)) != ISMINE_SPENDABLE) {
                 LogPrintf("  %s %s - IS NOT SPENDABLE, was not locked\n", mne.getTxHash(), mne.getOutputIndex());
@@ -1951,8 +1955,10 @@ bool AppInitMain()
 
 #ifdef ENABLE_WALLET
     if(!fMasterNode) {
-       if(GetWallets().front() && gArgs.GetBoolArg("-staking", true)) {
-           threadGroup.create_thread(std::bind(&ThreadStakeMinter, boost::ref(chainparams), boost::ref(connman), GetWallets().front()));
+       auto vpwalletsStake = GetWallets();
+       CWallet* const pwalletStake = vpwalletsStake.empty() ? nullptr : vpwalletsStake.front();
+       if(pwalletStake && gArgs.GetBoolArg("-staking", true)) {
+           threadGroup.create_thread(std::bind(&ThreadStakeMinter, boost::ref(chainparams), boost::ref(connman), pwalletStake));
            threadGroup.create_thread(std::bind(&ThreadAbandonCoinStake));
        }
     }

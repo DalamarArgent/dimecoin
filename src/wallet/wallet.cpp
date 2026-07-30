@@ -424,8 +424,14 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase, bool stakingOnly)
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, _vMasterKey))
                 continue; // try another master key
             if (CCryptoKeyStore::Unlock(_vMasterKey))
+            {
+                // The braces matter: this return was previously outside the if,
+                // so the result of the keystore unlock was discarded and success
+                // was reported unconditionally. On failure fall through and try
+                // the next master key, ending in the return false below.
                 fWalletUnlockStakingOnly = stakingOnly;
-            return true;
+                return true;
+            }
         }
     }
     return false;
@@ -449,24 +455,47 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
                 return false;
             if (CCryptoKeyStore::Unlock(_vMasterKey))
             {
+                // Preserve the current record so it can be put back if the
+                // rewrite below does not reach the database, otherwise the
+                // in-memory and on-disk copies would disagree.
+                const CMasterKey kOldMasterKey = pMasterKey.second;
+
                 int64_t nStartTime = GetTimeMillis();
                 crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod);
-                pMasterKey.second.nDeriveIterations = static_cast<unsigned int>(pMasterKey.second.nDeriveIterations * (100 / ((double)(GetTimeMillis() - nStartTime))));
+                // A fast machine can complete this in under a millisecond. Dividing
+                // by the resulting zero yields infinity, and converting that to an
+                // unsigned integer is undefined behaviour.
+                int64_t nElapsed = GetTimeMillis() - nStartTime;
+                if (nElapsed < 1) nElapsed = 1;
+                pMasterKey.second.nDeriveIterations = static_cast<unsigned int>(pMasterKey.second.nDeriveIterations * (100 / (double)nElapsed));
 
                 nStartTime = GetTimeMillis();
                 crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod);
-                pMasterKey.second.nDeriveIterations = (pMasterKey.second.nDeriveIterations + static_cast<unsigned int>(pMasterKey.second.nDeriveIterations * 100 / ((double)(GetTimeMillis() - nStartTime)))) / 2;
+                nElapsed = GetTimeMillis() - nStartTime;
+                if (nElapsed < 1) nElapsed = 1;
+                pMasterKey.second.nDeriveIterations = (pMasterKey.second.nDeriveIterations + static_cast<unsigned int>(pMasterKey.second.nDeriveIterations * 100 / (double)nElapsed)) / 2;
 
                 if (pMasterKey.second.nDeriveIterations < 25000)
                     pMasterKey.second.nDeriveIterations = 25000;
 
                 LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i\n", pMasterKey.second.nDeriveIterations);
 
-                if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
+                if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod)) {
+                    pMasterKey.second = kOldMasterKey;
                     return false;
-                if (!crypter.Encrypt(_vMasterKey, pMasterKey.second.vchCryptedKey))
+                }
+                if (!crypter.Encrypt(_vMasterKey, pMasterKey.second.vchCryptedKey)) {
+                    pMasterKey.second = kOldMasterKey;
                     return false;
-                WalletBatch(*database).WriteMasterKey(pMasterKey.first, pMasterKey.second);
+                }
+                // The result of the write was previously discarded, leaving the
+                // caller to believe the change had been recorded when it had not.
+                if (!WalletBatch(*database).WriteMasterKey(pMasterKey.first, pMasterKey.second)) {
+                    pMasterKey.second = kOldMasterKey;
+                    if (fWasLocked)
+                        Lock();
+                    return false;
+                }
                 if (fWasLocked)
                     Lock();
                 return true;
@@ -658,11 +687,18 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
     CCrypter crypter;
     int64_t nStartTime = GetTimeMillis();
     crypter.SetKeyFromPassphrase(strWalletPassphrase, kMasterKey.vchSalt, 25000, kMasterKey.nDerivationMethod);
-    kMasterKey.nDeriveIterations = static_cast<unsigned int>(2500000 / ((double)(GetTimeMillis() - nStartTime)));
+    // A fast machine can complete this in under a millisecond. Dividing by the
+    // resulting zero yields infinity, and converting that to an unsigned integer
+    // is undefined behaviour.
+    int64_t nElapsed = GetTimeMillis() - nStartTime;
+    if (nElapsed < 1) nElapsed = 1;
+    kMasterKey.nDeriveIterations = static_cast<unsigned int>(2500000 / (double)nElapsed);
 
     nStartTime = GetTimeMillis();
     crypter.SetKeyFromPassphrase(strWalletPassphrase, kMasterKey.vchSalt, kMasterKey.nDeriveIterations, kMasterKey.nDerivationMethod);
-    kMasterKey.nDeriveIterations = (kMasterKey.nDeriveIterations + static_cast<unsigned int>(kMasterKey.nDeriveIterations * 100 / ((double)(GetTimeMillis() - nStartTime)))) / 2;
+    nElapsed = GetTimeMillis() - nStartTime;
+    if (nElapsed < 1) nElapsed = 1;
+    kMasterKey.nDeriveIterations = (kMasterKey.nDeriveIterations + static_cast<unsigned int>(kMasterKey.nDeriveIterations * 100 / (double)nElapsed)) / 2;
 
     if (kMasterKey.nDeriveIterations < 25000)
         kMasterKey.nDeriveIterations = 25000;
@@ -684,15 +720,30 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             encrypted_batch = nullptr;
             return false;
         }
-        encrypted_batch->WriteMasterKey(nMasterKeyMaxID, kMasterKey);
+        // The result of this write was previously discarded. A transaction that
+        // commits without this record would leave the wallet file in a state the
+        // daemon cannot subsequently open.
+        if (!encrypted_batch->WriteMasterKey(nMasterKeyMaxID, kMasterKey)) {
+            encrypted_batch->TxnAbort();
+            delete encrypted_batch;
+            encrypted_batch = nullptr;
+            mapMasterKeys.erase(nMasterKeyMaxID);
+            --nMasterKeyMaxID;
+            return false;
+        }
 
         if (!EncryptKeys(_vMasterKey))
         {
             encrypted_batch->TxnAbort();
             delete encrypted_batch;
-            // We now probably have half of our keys encrypted in memory, and half not...
-            // die and let the user reload the unencrypted wallet.
-            assert(false);
+            encrypted_batch = nullptr;
+            // EncryptKeys() now completes as a unit: on failure it restores the
+            // keystore to its previous state, and TxnAbort() has discarded the
+            // database side. Undo the record added above and report the failure
+            // rather than terminating the process.
+            mapMasterKeys.erase(nMasterKeyMaxID);
+            --nMasterKeyMaxID;
+            return false;
         }
 
         // Encryption was introduced in version 0.4.0
@@ -709,7 +760,11 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         encrypted_batch = nullptr;
 
         Lock();
-        Unlock(strWalletPassphrase);
+        // Now that Unlock() reports its real result, act on it: the steps below
+        // need an unlocked keystore to succeed.
+        if (!Unlock(strWalletPassphrase)) {
+            return false;
+        }
 
         // if we are using HD, replace the HD master key (seed) with a new one
         if (IsHDEnabled()) {

@@ -23,7 +23,9 @@ extern uint256 hashSyncCheckpoint;
 extern CSyncCheckpoint checkpointMessage;
 extern CCriticalSection cs_hashSyncCheckpoint;
 
-bool WriteSyncCheckpoint(const uint256& hashCheckpoint);
+// Callers must hold cs_hashSyncCheckpoint: this updates hashSyncCheckpoint in place
+// after the database write succeeds.
+bool WriteSyncCheckpoint(const uint256& hashCheckpoint) EXCLUSIVE_LOCKS_REQUIRED(cs_hashSyncCheckpoint);
 void UnloadSyncCheckpoint();
 bool AcceptPendingSyncCheckpoint();
 uint256 AutoSelectSyncCheckpoint();

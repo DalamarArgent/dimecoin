@@ -3747,15 +3747,19 @@ bool ProcessNewBlockHeaders(const std::vector<CBlockHeader>& headers, CValidatio
             CBlockIndex *pindex = nullptr; // Use a temp pindex instead of ppindex to avoid a const_cast
 
             // Check for the checkpoint
-            if (header.hashPrevBlock != chainActive.Tip()->GetBlockHash())
+            const CBlockIndex* pindexTip = chainActive.Tip();
+            if (pindexTip && header.hashPrevBlock != pindexTip->GetBlockHash())
             {
                 // Extra checks to prevent "fill up memory by spamming with bogus blocks"
                 const CBlockIndex* pcheckpoint = Checkpoints::AutoSelectSyncCheckpoint();
-                int64_t deltaTime = header.GetBlockTime() - pcheckpoint->nTime;
-                if (deltaTime < 0)
+                if (pcheckpoint)
                 {
-                    return state.DoS(1, false, REJECT_INVALID, "older-than-checkpoint", false,
-                                     "ProcessNewBlockHeaders(): Block with a timestamp before last checkpoint");
+                    int64_t deltaTime = header.GetBlockTime() - pcheckpoint->nTime;
+                    if (deltaTime < 0)
+                    {
+                        return state.DoS(1, false, REJECT_INVALID, "older-than-checkpoint", false,
+                                         "ProcessNewBlockHeaders(): Block with a timestamp before last checkpoint");
+                    }
                 }
             }
 
@@ -4108,6 +4112,11 @@ bool static LoadBlockIndexDB(const CChainParams& chainparams)
     // ReadSyncCheckpoint() leaves its out-param untouched when the key is absent, so
     // clear it first: otherwise a value left over from an earlier load pass survives a
     // block-database rebuild and ends up naming a CBlockIndex that no longer exists.
+    //
+    // Uncontended here (startup is single-threaded), but taken so the lock that
+    // WriteSyncCheckpoint() declares it requires is actually held on every path.
+    {
+    LOCK(cs_hashSyncCheckpoint);
     hashSyncCheckpoint = uint256();
     if (!pblocktree->ReadSyncCheckpoint(hashSyncCheckpoint)) {
          hashSyncCheckpoint = uint256();
@@ -4120,6 +4129,7 @@ bool static LoadBlockIndexDB(const CChainParams& chainparams)
              LogPrintf("LoadBlockIndexDB(): failed to reset synchronized checkpoint to genesis block\n");
     } else {
          LogPrintf("LoadBlockIndexDB(): synchronized checkpoint %s\n", hashSyncCheckpoint.ToString().c_str());
+    }
     }
 
     // Check presence of blk files
