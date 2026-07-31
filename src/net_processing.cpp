@@ -1946,7 +1946,20 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
                   pfrom->nStartingHeight, addrMe.ToString(), pfrom->GetId(),
                   remoteAddr);
 
-        int64_t nTimeOffset = nTime - GetTime();
+        // nTime is attacker-controlled and arrives unvalidated, so computing
+        // "nTime - nNow" directly is signed-overflow UB for extreme values. Clamp the
+        // sample to a wide but sane window instead of disconnecting the peer, so that
+        // old or badly-clocked nodes keep connecting exactly as they do today.
+        static const int64_t MAX_PEER_TIME_OFFSET = 24 * 60 * 60;
+        const int64_t nNow = GetTime();
+        int64_t nTimeOffset;
+        if (nTime > nNow + MAX_PEER_TIME_OFFSET) {
+            nTimeOffset = MAX_PEER_TIME_OFFSET;
+        } else if (nTime < nNow - MAX_PEER_TIME_OFFSET) {
+            nTimeOffset = -MAX_PEER_TIME_OFFSET;
+        } else {
+            nTimeOffset = nTime - nNow;
+        }
         pfrom->nTimeOffset = nTimeOffset;
         AddTimeData(pfrom->addr, nTimeOffset);
 

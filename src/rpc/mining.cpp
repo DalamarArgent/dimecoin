@@ -712,7 +712,7 @@ static UniValue getblocktemplate(const JSONRPCRequest& request)
         CTxDestination mnAddress;
         if (!mnpayments.GetBlockPayee(pindexPrev->nHeight + 1, mnScript)) {
             masternode_info_t mnInfo;
-            if (!mnodeman.GetNextMasternodeInQueueForPayment(pindexPrev->nHeight + 1, true, mnCount, mnInfo))
+            if (mnodeman.GetNextMasternodeInQueueForPayment(pindexPrev->nHeight + 1, true, mnCount, mnInfo))
                 mnScript = GetScriptForDestination(mnInfo.pubKeyCollateralAddress.GetID());
         }
 
