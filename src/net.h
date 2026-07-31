@@ -60,6 +60,12 @@ static const int MAX_OUTBOUND_CONNECTIONS = 8;
 static const int MAX_OUTBOUND_MASTERNODE_CONNECTIONS = 20;
 /** Maximum number of addnode outgoing nodes */
 static const int MAX_ADDNODE_CONNECTIONS = 8;
+/** Maximum number of manually added node addresses retained by addnode.
+ *  Bounds memory: without it, addnode can be called without limit. */
+static const size_t MAX_ADDNODE_ENTRIES = 800;
+/** Maximum accepted length of a manually added node address.
+ *  A DNS name is at most 253 characters, plus ":65535". */
+static const size_t MAX_ADDNODE_ADDRESS_LENGTH = 300;
 /** -listen default */
 static const bool DEFAULT_LISTEN = true;
 /** -upnp default */

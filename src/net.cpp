@@ -2641,10 +2641,13 @@ std::vector<CAddress> CConnman::GetAddresses()
 
 bool CConnman::AddNode(const std::string& strNode)
 {
+    if (strNode.size() > MAX_ADDNODE_ADDRESS_LENGTH) return false;
+
     LOCK(cs_vAddedNodes);
     for (const std::string& it : vAddedNodes) {
         if (strNode == it) return false;
     }
+    if (vAddedNodes.size() >= MAX_ADDNODE_ENTRIES) return false;
 
     vAddedNodes.push_back(strNode);
     return true;

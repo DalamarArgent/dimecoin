@@ -82,6 +82,11 @@ private:
     bool GetMasternodeScores(const uint256& nBlockHash, score_pair_vec_t& vecMasternodeScoresRet, int nMinProtocol = 0);
 
 public:
+    /// Upper bound on mapSeenMasternodeBroadcast. Entries are cached before
+    /// validation and are not expired on a timer, so without a cap an
+    /// unauthenticated peer can grow the map without limit.
+    static const size_t MAX_SEEN_MNB_ENTRIES        = 5000;
+
     // Keep track of all broadcasts I've seen
     std::map<uint256, std::pair<int64_t, CMasternodeBroadcast> > mapSeenMasternodeBroadcast;
     // Keep track of all pings I've seen
@@ -142,6 +147,11 @@ public:
     void CheckAndRemove(CConnman& connman);
     /// This is dummy overload to be used for dumping/loading mncache.dat
     void CheckAndRemove() {}
+
+    /// Bound mapSeenMasternodeBroadcast, evicting the oldest entries first.
+    /// Takes cs internally; cs is recursive, so callers already holding it
+    /// (such as CheckMnbAndUpdateMasternodeList) may call this directly.
+    void EnforceSeenBroadcastLimit();
 
     /// Clear Masternode vector
     void Clear();

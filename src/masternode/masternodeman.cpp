@@ -15,6 +15,10 @@
 /** Masternode manager */
 CMasternodeMan mnodeman;
 
+// Out-of-line definition for the in-class initialised constant. Required
+// because it is odr-used (bound to a const reference) from the unit tests.
+const size_t CMasternodeMan::MAX_SEEN_MNB_ENTRIES;
+
 static bool GetBlockHash(uint256 &hash, int nBlockHeight)
 {
     LOCK(cs_main);
@@ -1420,6 +1424,29 @@ void CMasternodeMan::UpdateMasternodeList(CMasternodeBroadcast mnb, CConnman& co
     }
 }
 
+void CMasternodeMan::EnforceSeenBroadcastLimit()
+{
+    LOCK(cs);
+    if(mapSeenMasternodeBroadcast.size() <= MAX_SEEN_MNB_ENTRIES) return;
+
+    // Entries are keyed by hash, so map order says nothing about age. Sort by
+    // the stored insertion time and drop the oldest until back within the cap.
+    std::vector<std::pair<int64_t, uint256> > vecByAge;
+    vecByAge.reserve(mapSeenMasternodeBroadcast.size());
+    for(const auto& it : mapSeenMasternodeBroadcast) {
+        vecByAge.push_back(std::make_pair(it.second.first, it.first));
+    }
+    std::sort(vecByAge.begin(), vecByAge.end());
+
+    size_t nRemove = mapSeenMasternodeBroadcast.size() - MAX_SEEN_MNB_ENTRIES;
+    for(size_t i = 0; i < nRemove && i < vecByAge.size(); ++i) {
+        mapSeenMasternodeBroadcast.erase(vecByAge[i].second);
+    }
+
+    LogPrint(BCLog::MASTERNODE, "CMasternodeMan::EnforceSeenBroadcastLimit -- evicted %u entries, size=%u\n",
+             nRemove, mapSeenMasternodeBroadcast.size());
+}
+
 bool CMasternodeMan::CheckMnbAndUpdateMasternodeList(CNode* pfrom, CMasternodeBroadcast mnb, int& nDos, CConnman& connman)
 {
     LOCK(cs_main);
@@ -1461,6 +1488,7 @@ bool CMasternodeMan::CheckMnbAndUpdateMasternodeList(CNode* pfrom, CMasternodeBr
             return true;
         }
         mapSeenMasternodeBroadcast.insert(std::make_pair(hash, std::make_pair(GetTime(), mnb)));
+        EnforceSeenBroadcastLimit();
 
         LogPrint(BCLog::MASTERNODE, "CMasternodeMan::CheckMnbAndUpdateMasternodeList -- masternode=%s new\n", mnb.vin.prevout.ToString());
 

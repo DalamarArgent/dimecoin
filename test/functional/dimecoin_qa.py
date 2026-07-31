@@ -254,15 +254,36 @@ class Node:
             time.sleep(1)
         raise NodeError("RPC did not come up within %ss: %r" % (timeout or self.timeout, last))
 
+    def wait_for_ports_free(self, timeout=None):
+        """Wait until both ports can actually be bound again.
+
+        The RPC server stops answering before the process exits, so a daemon
+        that has flushed its chainstate can still be holding its listening
+        sockets. Without this wait the next start() races the dying process
+        and fails with a spurious 'port is already in use'.
+        """
+        deadline = time.time() + (timeout or self.timeout)
+        while time.time() < deadline:
+            try:
+                self.check_ports_free()
+                return True
+            except NodeError:
+                time.sleep(0.5)
+        return False
+
     def stop(self, wait=True):
         res = self.cli("stop", check_chain=False, quiet=True)
         if wait:
             deadline = time.time() + self.timeout
+            stopped = False
             while time.time() < deadline:
                 probe = self.cli("getblockcount", check_chain=False, quiet=True)
                 if not probe.ok:
-                    return True
+                    stopped = True
+                    break
                 time.sleep(1)
+            self.wait_for_ports_free()
+            return stopped
         return res.ok
 
     def is_running(self):
