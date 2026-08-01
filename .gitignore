@@ -8,6 +8,7 @@ src/dimecoin-tx
 src/test/test_dimecoin
 src/test/test_dimecoin_fuzzy
 src/qt/test/test_dimecoin-qt
+src/bench/bench_dimecoin
 
 # autoreconf
 Makefile.in
