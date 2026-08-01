@@ -185,7 +185,11 @@ Result CreateTransaction(const CWallet* wallet, const uint256& txid, const CCoin
     // Now modify the output to increase the fee.
     // If the output is not large enough to pay the fee, fail.
     CAmount nDelta = new_fee - old_fee;
-    assert(nDelta > 0);
+    if (nDelta <= 0) {
+        errors.push_back(strprintf("Failed to bump fee: new fee (%s) does not exceed the original fee (%s)",
+                                   FormatMoney(new_fee), FormatMoney(old_fee)));
+        return Result::WALLET_ERROR;
+    }
     mtx =  *wtx.tx;
     CTxOut* poutput = &(mtx.vout[nOutput]);
     if (poutput->nValue < nDelta) {

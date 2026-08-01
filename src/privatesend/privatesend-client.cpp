@@ -980,9 +980,19 @@ bool CPrivateSendClient::StartNewQueue(CAmount nValueMin, CAmount nBalanceNeedsA
 
             std::vector<CAmount> vecAmounts;
             GetMainWallet()->ConvertList(vecTxIn, vecAmounts);
-            // try to get a single random denom out of vecAmounts
-            while(nSessionDenom == 0) {
+            // try to get a single random denom out of vecAmounts.
+            // GetDenominationsByAmounts() returns 0 both randomly and, for non-denominated
+            // inputs, deterministically - so this must be bounded or it never terminates.
+            for (int nDenomAttempts = 0; nDenomAttempts < 100 && nSessionDenom == 0; ++nDenomAttempts) {
                 nSessionDenom = CPrivateSend::GetDenominationsByAmounts(vecAmounts);
+            }
+            if (nSessionDenom == 0) {
+                LogPrintf("CPrivateSendClient::StartNewQueue -- couldn't determine a denomination, addr=%s\n", infoMn.addr.ToString());
+                if (pnodeFound) {
+                    pnodeFound->Release();
+                }
+                nTries++;
+                continue;
             }
 
             connman.PushMessage(pnode, NetMsgType::DSACCEPT, nSessionDenom, txMyCollateral);

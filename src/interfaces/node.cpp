@@ -304,7 +304,7 @@ class NodeImpl : public Node
             }));
     }
 
-    std::unique_ptr<Handler> handleNotifyAdditionalDataSyncProgressChanged(NotifyAdditionalDataSyncProressChangedFn fn)
+    std::unique_ptr<Handler> handleNotifyAdditionalDataSyncProgressChanged(NotifyAdditionalDataSyncProressChangedFn fn) override
     {
         return MakeHandler(::uiInterface.NotifyAdditionalDataSyncProgressChanged.connect(fn));
     }

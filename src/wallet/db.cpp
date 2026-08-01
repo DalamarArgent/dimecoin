@@ -104,6 +104,10 @@ void BerkeleyEnvironment::Close()
     int ret = dbenv->close(0);
     if (ret != 0)
         LogPrintf("BerkeleyEnvironment::EnvShutdown: Error %d shutting down database environment: %s\n", ret, DbEnv::strerror(ret));
+    if (m_errfile) {
+        fclose(m_errfile);
+        m_errfile = nullptr;
+    }
     if (!fMockDb)
         DbEnv((u_int32_t)0).remove(strPath.c_str(), 0);
 }
@@ -154,7 +158,8 @@ bool BerkeleyEnvironment::Open(bool retry)
     dbenv->set_lg_max(1048576);
     dbenv->set_lk_max_locks(40000);
     dbenv->set_lk_max_objects(40000);
-    dbenv->set_errfile(fsbridge::fopen(pathErrorFile, "a")); /// debug
+    m_errfile = fsbridge::fopen(pathErrorFile, "a"); /// debug
+    dbenv->set_errfile(m_errfile);
     dbenv->set_flags(DB_AUTO_COMMIT, 1);
     dbenv->set_flags(DB_TXN_WRITE_NOSYNC, 1);
     dbenv->log_set_config(DB_LOG_AUTO_REMOVE, 1);

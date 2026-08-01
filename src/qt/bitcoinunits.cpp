@@ -43,7 +43,7 @@ QString BitcoinUnits::longName(int unit)
     {
     case DIME: return QString("DIME");
     case mDIME: return QString("mDIME");
-    case uDIME: return QString::fromUtf8("µBTC");
+    case uDIME: return QString::fromUtf8("µDIME");
     default: return QString("???");
     }
 }

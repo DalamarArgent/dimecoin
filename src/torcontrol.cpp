@@ -42,6 +42,9 @@ static const std::string TOR_SAFE_CLIENTKEY = "Tor safe cookie authentication co
 static const float RECONNECT_TIMEOUT_START = 1.0;
 /** Exponential backoff configuration - growth factor */
 static const float RECONNECT_TIMEOUT_EXP = 1.5;
+/** Exponential backoff configuration - upper bound in seconds, so that repeated
+ * failures cannot grow the retry interval without limit. */
+static const float RECONNECT_TIMEOUT_MAX = 300.0;
 /** Maximum length for lines received on TorControlConnection.
  * tor-control-spec.txt mentions that there is explicitly no limit defined to line length,
  * this is belt-and-suspenders sanity limit to prevent memory exhaustion.
@@ -219,6 +222,8 @@ bool TorControlConnection::Connect(const std::string &target, const ConnectionCB
     // Finally, connect to target
     if (bufferevent_socket_connect(b_conn, (struct sockaddr*)&connect_to_addr, connect_to_addrlen) < 0) {
         LogPrintf("tor: Error connecting to address %s\n", target);
+        bufferevent_free(b_conn);
+        b_conn = nullptr;
         return false;
     }
     return true;
@@ -710,6 +715,8 @@ void TorController::disconnected_cb(TorControlConnection& _conn)
     if (reconnect_ev)
         event_add(reconnect_ev, &time);
     reconnect_timeout *= RECONNECT_TIMEOUT_EXP;
+    if (reconnect_timeout > RECONNECT_TIMEOUT_MAX)
+        reconnect_timeout = RECONNECT_TIMEOUT_MAX;
 }
 
 void TorController::Reconnect()

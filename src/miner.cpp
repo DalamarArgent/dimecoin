@@ -222,8 +222,6 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(CWallet *wallet, 
     fIncludeWitness = IsWitnessEnabled(pindexPrev, chainparams.GetConsensus()) && fMineWitnessTx;
 
     int64_t nTime1 = GetTimeMicros();
-    nLastBlockTx = nBlockTx;
-    nLastBlockWeight = nBlockWeight;
 
     // Create coinbase transaction.
     CMutableTransaction coinbaseTx;
@@ -267,6 +265,9 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(CWallet *wallet, 
         LOCK(mempool.cs);
         addPackageTxs(nPackagesSelected, nDescendantsUpdated);
     }
+
+    nLastBlockTx = nBlockTx;
+    nLastBlockWeight = nBlockWeight;
 
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
     //! internal proof of work split (reward)

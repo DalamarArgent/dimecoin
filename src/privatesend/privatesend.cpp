@@ -217,7 +217,7 @@ bool CPrivateSend::IsCollateralValid(const CTransactionRef& txCollateral)
 
     //collateral transactions are required to pay out a small fee to the miners
     if(nValueIn - nValueOut < GetCollateralAmount()) {
-        LogPrint(BCLog::PRIVATESEND, "CPrivateSend::IsCollateralValid -- did not include enough fees in transaction: fees: %d, txCollateral=%s", nValueOut - nValueIn, txCollateral->ToString());
+        LogPrint(BCLog::PRIVATESEND, "CPrivateSend::IsCollateralValid -- did not include enough fees in transaction: fees: %d, txCollateral=%s", nValueIn - nValueOut, txCollateral->ToString());
         return false;
     }
 

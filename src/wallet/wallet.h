@@ -814,7 +814,7 @@ public:
 
     bool GetMasternodeOutpointAndKeys(COutPoint& outpointRet, CPubKey& pubKeyRet, CKey& keyRet, std::string strTxHash, std::string strOutputIndex);
 
-    bool fWalletUnlockStakingOnly = false;
+    std::atomic<bool> fWalletUnlockStakingOnly{false};
     /** Get a name for this wallet for logging/debugging purposes.
      */
     const std::string& GetName() const { return m_name; }

@@ -13,7 +13,7 @@
 
 void zmqError(const char *str)
 {
-    LogPrint(BCLog::ZMQ, "zmq: Error: %s, errno=%s\n", str, zmq_strerror(errno));
+    LogPrint(BCLog::ZMQ, "zmq: Error: %s, errno=%s\n", str, zmq_strerror(zmq_errno()));
 }
 
 CZMQNotificationInterface::CZMQNotificationInterface() : pcontext(nullptr)

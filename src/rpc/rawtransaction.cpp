@@ -229,6 +229,8 @@ static UniValue gettxoutproof(const JSONRPCRequest& request)
     std::set<uint256> setTxids;
     uint256 oneTxid;
     UniValue txids = request.params[0].get_array();
+    if (txids.empty())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, txids must contain at least one txid");
     for (unsigned int idx = 0; idx < txids.size(); idx++) {
         const UniValue& txid = txids[idx];
         if (txid.get_str().length() != 64 || !IsHex(txid.get_str()))

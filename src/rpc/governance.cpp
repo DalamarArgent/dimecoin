@@ -84,11 +84,17 @@ UniValue gobject(const JSONRPCRequest& request)
 
         std::string strHex = request.params[1].get_str();
 
+        if (!IsHex(strHex)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Governance object data must be a valid hexadecimal string");
+        }
+
         std::vector<unsigned char> v = ParseHex(strHex);
         std::string s(v.begin(), v.end());
 
         UniValue u(UniValue::VOBJ);
-        u.read(s);
+        if (!u.read(s)) {
+            throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Failed to deserialize governance object data as JSON");
+        }
 
         return u.write().c_str();
     }

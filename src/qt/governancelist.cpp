@@ -46,7 +46,7 @@ GovernanceList::GovernanceList(const PlatformStyle *platformStyle, QWidget *pare
     ui->tableWidgetGobjects->setColumnWidth(7, columnFund);
 
 
-    contextMenu = new QMenu();
+    contextMenu = new QMenu(this);
     connect(ui->tableWidgetGobjects, SIGNAL(customContextMenuRequested(const QPoint&)), this, SLOT(showContextMenu(const QPoint&)));
     connect(ui->tableWidgetGobjects, SIGNAL(doubleClicked(QModelIndex)), this, SLOT(on_GovernanceButton_clicked()));
 

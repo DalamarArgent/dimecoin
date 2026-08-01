@@ -39,6 +39,8 @@ public:
     std::unique_ptr<DbEnv> dbenv;
     std::map<std::string, int> mapFileUseCount;
     std::map<std::string, Db*> mapDb;
+    //! Handle for the BDB error log passed to DbEnv::set_errfile; owned here so it can be closed.
+    FILE* m_errfile = nullptr;
 
     BerkeleyEnvironment(const fs::path& env_directory);
     ~BerkeleyEnvironment();

@@ -4497,7 +4497,8 @@ bool CWallet::AddDestData(const CTxDestination &dest, const std::string &key, co
 
 bool CWallet::EraseDestData(const CTxDestination &dest, const std::string &key)
 {
-    if (!mapAddressBook[dest].destdata.erase(key))
+    auto it = mapAddressBook.find(dest);
+    if (it == mapAddressBook.end() || !it->second.destdata.erase(key))
         return false;
     return WalletBatch(*database).EraseDestData(EncodeDestination(dest), key);
 }

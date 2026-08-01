@@ -1003,15 +1003,12 @@ static UniValue setgenerate(const JSONRPCRequest& request)
                 "setgenerate generate ( genproclimit )\n"
                 "\nSet 'generate' true or false to turn generation on or off.\n"
                 "Generation is limited to 'genproclimit' processors, -1 is unlimited.\n"
-                "See the getgenerate call for the current setting.\n"
                 "\nArguments:\n"
                 "1. generate         (boolean, required) Set to true to turn on generation, false to turn off.\n"
                 "2. genproclimit     (numeric, optional) Set the processor limit for when generation is on. Can be -1 for unlimited.\n"
                 "\nExamples:\n"
                 "\nSet the generation on with a limit of one processor\n"
                 + HelpExampleCli("setgenerate", "true 1") +
-                "\nCheck the setting\n"
-                + HelpExampleCli("getgenerate", "") +
                 "\nTurn off generation\n"
                 + HelpExampleCli("setgenerate", "false") +
                 "\nUsing json rpc\n"
