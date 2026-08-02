@@ -547,11 +547,14 @@ bool CWallet::SetMinVersion(enum WalletFeature nVersion, WalletBatch* batch_in, 
         nWalletMaxVersion = nVersion;
 
     {
-        WalletBatch* batch = batch_in ? batch_in : new WalletBatch(*database);
+        std::unique_ptr<WalletBatch> batch_holder;
+        WalletBatch* batch = batch_in;
+        if (!batch) {
+            batch_holder.reset(new WalletBatch(*database));
+            batch = batch_holder.get();
+        }
         if (nWalletVersion > 40000)
             batch->WriteMinVersion(nWalletVersion);
-        if (!batch_in)
-            delete batch;
     }
 
     return true;
@@ -610,7 +613,7 @@ void CWallet::SyncMetaData(std::pair<TxSpends::iterator, TxSpends::iterator> ran
     // the oldest (smallest nOrderPos).
     // So: find smallest nOrderPos:
 
-    int nMinOrderPos = std::numeric_limits<int>::max();
+    int64_t nMinOrderPos = std::numeric_limits<int64_t>::max();
     const CWalletTx* copyFrom = nullptr;
     for (TxSpends::iterator it = range.first; it != range.second; ++it) {
         const CWalletTx* wtx = &mapWallet.at(it->second);
@@ -1637,11 +1640,11 @@ bool CWallet::IsWalletFlagSet(uint64_t flag)
 bool CWallet::SetWalletFlags(uint64_t overwriteFlags, bool memonly)
 {
     LOCK(cs_wallet);
-    m_wallet_flags = overwriteFlags;
     if (((overwriteFlags & g_known_wallet_flags) >> 32) ^ (overwriteFlags >> 32)) {
         // contains unknown non-tolerable wallet flags
         return false;
     }
+    m_wallet_flags = overwriteFlags;
     if (!memonly && !WalletBatch(*database).WriteWalletFlags(m_wallet_flags)) {
         throw std::runtime_error(std::string(__func__) + ": writing wallet flags failed");
     }
@@ -3499,10 +3502,11 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, CMu
             continue;
         }
 
-        CBlockIndex* pindex = mapBlockIndex[blockhash];
-        if (!pindex) {
+        auto itBlockIndex = mapBlockIndex.find(blockhash);
+        if (itBlockIndex == mapBlockIndex.end() || !itBlockIndex->second) {
             continue;
         }
+        CBlockIndex* pindex = itBlockIndex->second;
         CBlockHeader header = pindex->GetBlockHeader();
 
         bool fKernelFound = false;

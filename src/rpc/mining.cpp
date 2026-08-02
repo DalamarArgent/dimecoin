@@ -184,7 +184,11 @@ static UniValue generatetoaddress(const JSONRPCRequest& request)
     int nGenerate = request.params[0].get_int();
     uint64_t nMaxTries = 1000000;
     if (!request.params[2].isNull()) {
-        nMaxTries = request.params[2].get_int();
+        const int nMaxTriesArg = request.params[2].get_int();
+        if (nMaxTriesArg < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "maxtries must not be negative");
+        }
+        nMaxTries = (uint64_t)nMaxTriesArg;
     }
 
     CTxDestination destination = DecodeDestination(request.params[1].get_str());
@@ -224,6 +228,9 @@ static UniValue getmininginfo(const JSONRPCRequest& request)
     LOCK(cs_main);
 
     CBlockIndex* tip = chainActive.Tip();
+    if (!tip) {
+        throw JSONRPCError(RPC_IN_WARMUP, "No active chain tip available");
+    }
     const Consensus::Params& consensusParams = Params().GetConsensus();
 
     UniValue obj(UniValue::VOBJ);

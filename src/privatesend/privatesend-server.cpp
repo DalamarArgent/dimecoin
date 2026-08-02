@@ -547,7 +547,12 @@ void CPrivateSendServer::CheckForCompleteQueue(CConnman& connman)
 
         CDarksendQueue dsq(nSessionDenom, activeMasternode.outpoint, GetAdjustedTime(), true);
         LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CheckForCompleteQueue -- queue is ready, signing and relaying (%s)\n", dsq.ToString());
-        dsq.Sign();
+        // An unsigned queue is rejected by every peer that receives it, so
+        // relaying one only wastes bandwidth.
+        if(!dsq.Sign()) {
+            LogPrintf("CPrivateSendServer::CheckForCompleteQueue -- ERROR: failed to sign queue, not relaying\n");
+            return;
+        }
         dsq.Relay(connman);
     }
 }
@@ -753,9 +758,12 @@ bool CPrivateSendServer::CreateNewSession(int nDenom, CTransactionRef txCollater
         //broadcast that I'm accepting entries, only if it's the first entry through
         CDarksendQueue dsq(nDenom, activeMasternode.outpoint, GetAdjustedTime(), false);
         LogPrint(BCLog::PRIVATESEND, "CPrivateSendServer::CreateNewSession -- signing and relaying new queue: %s\n", dsq.ToString());
-        dsq.Sign();
-        dsq.Relay(connman);
-        vecDarksendQueue.push_back(dsq);
+        if(!dsq.Sign()) {
+            LogPrintf("CPrivateSendServer::CreateNewSession -- ERROR: failed to sign queue, not relaying\n");
+        } else {
+            dsq.Relay(connman);
+            vecDarksendQueue.push_back(dsq);
+        }
     }
 
     vecSessionCollaterals.push_back(txCollateral);

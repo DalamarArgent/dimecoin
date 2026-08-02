@@ -225,7 +225,7 @@ void BerkeleyEnvironment::MakeMock()
                              DB_THREAD |
                              DB_PRIVATE,
                          S_IRUSR | S_IWUSR);
-    if (ret > 0)
+    if (ret != 0)
         throw std::runtime_error(strprintf("BerkeleyEnvironment::MakeMock: Error %d opening database environment.", ret));
 
     fDbEnvInit = true;
@@ -290,7 +290,7 @@ bool BerkeleyBatch::Recover(const fs::path& file_path, void *callbackDataIn, boo
                             DB_BTREE,           // Database type
                             DB_CREATE,          // Flags
                             0);
-    if (ret > 0) {
+    if (ret != 0) {
         LogPrintf("Cannot create database file %s\n", filename);
         pdbCopy->close(0);
         return false;
@@ -311,10 +311,14 @@ bool BerkeleyBatch::Recover(const fs::path& file_path, void *callbackDataIn, boo
             if (!(*recoverKVcallback)(callbackDataIn, ssKey, ssValue))
                 continue;
         }
-        Dbt datKey(&row.first[0], row.first.size());
-        Dbt datValue(&row.second[0], row.second.size());
+        Dbt datKey(row.first.empty() ? nullptr : &row.first[0], row.first.size());
+        Dbt datValue(row.second.empty() ? nullptr : &row.second[0], row.second.size());
         int ret2 = pdbCopy->put(ptxn, &datKey, &datValue, DB_NOOVERWRITE);
-        if (ret2 > 0)
+        // BerkeleyDB reports its own failures as negative values, so a plain
+        // "> 0" test silently accepted them. DB_KEYEXIST is expected here:
+        // aggressive salvage can recover the same key more than once, and that
+        // must not fail the whole recovery.
+        if (ret2 != 0 && ret2 != DB_KEYEXIST)
             fSuccess = false;
     }
     if (ptxn->commit(0) != 0) {
@@ -610,7 +614,7 @@ bool BerkeleyBatch::Rewrite(BerkeleyDatabase& database, const char* pszSkip)
                                             DB_BTREE,           // Database type
                                             DB_CREATE,          // Flags
                                             0);
-                    if (ret > 0) {
+                    if (ret != 0) {
                         LogPrintf("BerkeleyBatch::Rewrite: Can't create database file %s\n", strFileRes);
                         fSuccess = false;
                     }
@@ -643,7 +647,7 @@ bool BerkeleyBatch::Rewrite(BerkeleyDatabase& database, const char* pszSkip)
                         Dbt datKey(ssKey.data(), ssKey.size());
                         Dbt datValue(ssValue.data(), ssValue.size());
                         int ret2 = pdbCopy->put(nullptr, &datKey, &datValue, DB_NOOVERWRITE);
-                        if (ret2 > 0)
+                        if (ret2 != 0 && ret2 != DB_KEYEXIST)
                             fSuccess = false;
                     }
                     if (fSuccess) {

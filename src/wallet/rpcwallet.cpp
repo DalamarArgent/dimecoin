@@ -2032,7 +2032,7 @@ UniValue listtransactions(const JSONRPCRequest& request)
                 if (pacentry != nullptr) AcentryToJSON(*pacentry, strAccount, ret);
             }
 
-            if ((int)ret.size() >= (nCount+nFrom)) break;
+            if ((int64_t)ret.size() >= ((int64_t)nCount + (int64_t)nFrom)) break;
         }
     }
 
@@ -2040,7 +2040,7 @@ UniValue listtransactions(const JSONRPCRequest& request)
 
     if (nFrom > (int)ret.size())
         nFrom = ret.size();
-    if ((nFrom + nCount) > (int)ret.size())
+    if (((int64_t)nFrom + (int64_t)nCount) > (int64_t)ret.size())
         nCount = ret.size() - nFrom;
 
     std::vector<UniValue> arrTmp = ret.getValues();

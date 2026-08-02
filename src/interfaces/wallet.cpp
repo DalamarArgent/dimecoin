@@ -111,6 +111,9 @@ WalletTxStatus MakeWalletTxStatus(const CWalletTx& wtx)
 WalletTxOut MakeWalletTxOut(CWallet& wallet, const CWalletTx& wtx, int n, int depth)
 {
     WalletTxOut result;
+    if (n < 0 || static_cast<size_t>(n) >= wtx.tx->vout.size()) {
+        return result;
+    }
     result.txout = wtx.tx->vout[n];
     result.time = wtx.GetTxTime();
     result.depth_in_main_chain = depth;
@@ -422,8 +425,8 @@ public:
             auto it = m_wallet.mapWallet.find(output.hash);
             if (it != m_wallet.mapWallet.end()) {
                 int depth = it->second.GetDepthInMainChain();
-                if (depth >= 0) {
-                    result.back() = MakeWalletTxOut(m_wallet, it->second, output.n, depth);
+                if (depth >= 0 && output.n <= 0x7fffffffU) {
+                    result.back() = MakeWalletTxOut(m_wallet, it->second, static_cast<int>(output.n), depth);
                 }
             }
         }
