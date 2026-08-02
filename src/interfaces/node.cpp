@@ -169,8 +169,12 @@ class NodeImpl : public Node
     }
     MasternodeCountInfo getNumMasternodes() override
     {
-        MasternodeCountInfo mnCount(mnodeman.size(), mnodeman.CountEnabled(PROTOCOL_VERSION), mnodeman.CountEnabled());
-        return mnCount;
+        //! Take all three counts under one lock: reading them through separate
+        //  calls lets the list change in between, so the numbers could describe
+        //  different states of the masternode list.
+        int nSize = 0, nEnabledProto = 0, nEnabled = 0;
+        mnodeman.GetCountsSnapshot(nSize, nEnabledProto, nEnabled, PROTOCOL_VERSION);
+        return MasternodeCountInfo(nSize, nEnabledProto, nEnabled);
     }
     int64_t getLastBlockTime() override
     {

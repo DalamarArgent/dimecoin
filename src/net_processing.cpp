@@ -55,6 +55,18 @@ static constexpr int64_t ORPHAN_TX_EXPIRE_INTERVAL = 5 * 60;
  *  Timeout = base + per_header * (expected number of headers) */
 static constexpr int64_t HEADERS_DOWNLOAD_TIMEOUT_BASE = 15 * 60 * 1000000; // 15 minutes
 static constexpr int64_t HEADERS_DOWNLOAD_TIMEOUT_PER_HEADER = 1000; // 1ms/header
+/** How long our designated header-sync peer may send us no headers at all before a block
+ *  announcement from any peer is allowed to trigger a getheaders during initial block download.
+ *  A healthy sync peer delivers a 2000-header batch every few hundred milliseconds, so this is
+ *  several orders of magnitude above normal and cannot be reached while header sync is making
+ *  progress. It is deliberately generous: a false positive during the header phase would answer
+ *  tip announcements with a mid-chain getheaders, and a full 2000-header reply re-arms the
+ *  "more getheaders" continuation - exactly the redundant-header traffic this gate exists to
+ *  suppress. A slow peer or congested link can stretch a single batch to tens of seconds while
+ *  still making real progress, so the threshold sits well above any plausible batch round trip
+ *  and still well below nHeadersSyncTimeout (hours on this chain), which is the fallback that
+ *  disconnects a genuinely dead sync peer. */
+static constexpr int64_t HEADERS_SYNC_STALL_TIMEOUT = 600 * 1000000; // 10 minutes
 /** Protect at least this many outbound peers from disconnection due to slow/
  * behind headers chain.
  */
@@ -233,6 +245,8 @@ struct CNodeState {
     bool fSyncStarted;
     //! When to potentially disconnect peer for stalling headers download
     int64_t nHeadersSyncTimeout;
+    //! Time (in microseconds) we last received a HEADERS message from this peer, or 0 if never.
+    int64_t m_last_headers_received;
     //! Since when we're stalling block download progress (in microseconds), or 0.
     int64_t nStallingSince;
     std::list<QueuedBlock> vBlocksInFlight;
@@ -303,6 +317,7 @@ struct CNodeState {
         nUnconnectingHeaders = 0;
         fSyncStarted = false;
         nHeadersSyncTimeout = 0;
+        m_last_headers_received = 0;
         nStallingSince = 0;
         nDownloadingSince = 0;
         nBlocksInFlight = 0;
@@ -327,6 +342,27 @@ static CNodeState *State(NodeId pnode) EXCLUSIVE_LOCKS_REQUIRED(cs_main) {
     if (it == mapNodeState.end())
         return nullptr;
     return &it->second;
+}
+
+/**
+ * True when header sync is not currently making progress: either no peer has been designated
+ * for header sync at all, or the designated peer has sent us no headers for
+ * HEADERS_SYNC_STALL_TIMEOUT. Used to decide whether a block announcement received during
+ * initial block download may be answered with a getheaders.
+ */
+static bool HeadersSyncStalled() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (nSyncStarted == 0) return true;
+
+    const int64_t nNow = GetTimeMicros();
+    for (const std::pair<const NodeId, CNodeState>& entry : mapNodeState) {
+        const CNodeState& state = entry.second;
+        if (!state.fSyncStarted) continue;
+        if (state.m_last_headers_received != 0 && nNow - state.m_last_headers_received < HEADERS_SYNC_STALL_TIMEOUT) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static void UpdatePreferredDownload(CNode* node, CNodeState* state) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
@@ -1509,6 +1545,14 @@ bool static ProcessHeadersMessage(CNode *pfrom, CConnman *connman, const std::ve
     const CNetMsgMaker msgMaker(pfrom->GetSendVersion());
     size_t nCount = headers.size();
 
+    {
+        // Record that this peer is still feeding us headers. An empty reply counts: it means
+        // the peer answered, so it is not the silent sync peer HeadersSyncStalled() looks for.
+        LOCK(cs_main);
+        CNodeState *nodestate = State(pfrom->GetId());
+        if (nodestate) nodestate->m_last_headers_received = GetTimeMicros();
+    }
+
     if (nCount == 0) {
         // Nothing interesting. Stop asking this peers for more headers.
         return true;
@@ -2144,19 +2188,25 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
             if (inv.type == MSG_BLOCK) {
                 UpdateBlockAvailability(pfrom->GetId(), inv.hash);
-                if (!fAlreadyHave && !fImporting && !fReindex && !mapBlocksInFlight.count(inv.hash) && !IsInitialBlockDownload()) {
+                if (!fAlreadyHave && !fImporting && !fReindex && !mapBlocksInFlight.count(inv.hash) && (!IsInitialBlockDownload() || HeadersSyncStalled())) {
                     // We used to request the full block here, but since headers-announcements are now the
                     // primary method of announcement on the network, and since, in the case that a node
                     // fell back to inv we probably have a reorg which we should get the headers for first,
                     // we now only provide a getheaders response here. When we receive the headers, we will
                     // then ask for the blocks we need.
                     //
-                    // Skipped during IBD: we already have a dedicated header sync peer (the fSyncStarted
-                    // gate in SendMessages allows only one). Answering every tip announcement here starts
-                    // a second, third, ... full header download, because a 2000-header reply re-arms the
-                    // "more getheaders" continuation in ProcessHeadersMessage. With 64s blocks all 8
-                    // outbound peers got pulled in within minutes and each streamed the entire chain -
+                    // Normally skipped during IBD: we already have a dedicated header sync peer (the
+                    // fSyncStarted gate in SendMessages allows only one). Answering every tip announcement
+                    // here starts a second, third, ... full header download, because a 2000-header reply
+                    // re-arms the "more getheaders" continuation in ProcessHeadersMessage. With 64s blocks
+                    // all 8 outbound peers got pulled in within minutes and each streamed the entire chain -
                     // measured at ~10x redundant header traffic, crowding out actual block download.
+                    //
+                    // The exception is HeadersSyncStalled(): if the designated sync peer has gone silent
+                    // (or none was ever designated) the suppression above would otherwise deadlock header
+                    // sync until nHeadersSyncTimeout expires, which on this chain is ~2 hours. A peer that
+                    // is actively streaming headers resets that clock every few hundred milliseconds, so
+                    // this cannot open the gate while header sync is making progress.
                     connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::GETHEADERS, chainActive.GetLocator(pindexBestHeader), inv.hash));
                     LogPrint(BCLog::NET, "getheaders (%d) %s to peer=%d\n", pindexBestHeader->nHeight, inv.hash.ToString(), pfrom->GetId());
                 }
@@ -3643,6 +3693,8 @@ bool PeerLogicValidation::SendMessages(CNode* pto)
             if ((nSyncStarted == 0 && fFetch) || pindexBestHeader->GetBlockTime() > GetAdjustedTime() - 24 * 60 * 60) {
                 state.fSyncStarted = true;
                 state.nHeadersSyncTimeout = GetTimeMicros() + HEADERS_DOWNLOAD_TIMEOUT_BASE + HEADERS_DOWNLOAD_TIMEOUT_PER_HEADER * (GetAdjustedTime() - pindexBestHeader->GetBlockTime())/(consensusParams.nPowTargetSpacing);
+                // Start the stall clock now, so a peer that never answers at all is detected.
+                state.m_last_headers_received = GetTimeMicros();
                 nSyncStarted++;
                 const CBlockIndex *pindexStart = pindexBestHeader;
                 /* If possible, start at the block preceding the currently

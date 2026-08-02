@@ -13,12 +13,24 @@
 #include <net_processing.h>
 #include <util/strencodings.h>
 
+#include <limits>
+
 class CMasternodePayments;
 class CMasternodePaymentVote;
 class CMasternodeBlockPayees;
 
 static const int MNPAYMENTS_SIGNATURES_REQUIRED         = 6;
 static const int MNPAYMENTS_SIGNATURES_TOTAL            = 10;
+
+//! Narrow a container size to int without wrapping to a negative value. Vote and block
+//! counts are compared against int limits and reported as int; no container here can
+//! legitimately reach INT_MAX entries, so saturating is strictly safer than truncating.
+static inline int CountToInt(size_t nCount)
+{
+    return nCount > static_cast<size_t>(std::numeric_limits<int>::max())
+               ? std::numeric_limits<int>::max()
+               : static_cast<int>(nCount);
+}
 
 //! How many times an unverified payment vote may be re-validated.
 //  A vote that fails validation only because our masternode list was still incomplete must be
@@ -38,7 +50,7 @@ static const int MIN_MASTERNODE_PAYMENT_PROTO_VERSION_2 = PROTOCOL_VERSION-1;
 
 extern CCriticalSection cs_vecPayees;
 extern CCriticalSection cs_mapMasternodeBlocks;
-extern CCriticalSection cs_mapMasternodePayeeVotes;
+extern CCriticalSection cs_mapMasternodePaymentVotes;
 
 extern CMasternodePayments mnpayments;
 
@@ -80,7 +92,7 @@ public:
 
     void AddVoteHash(uint256 hashIn) { vecVoteHashes.push_back(hashIn); }
     std::vector<uint256> GetVoteHashes() const { return vecVoteHashes; }
-    int GetVoteCount() const { return vecVoteHashes.size(); }
+    int GetVoteCount() const { return CountToInt(vecVoteHashes.size()); }
 };
 
 // Keep track of votes for payees from masternodes
@@ -228,8 +240,8 @@ public:
     void FillBlockPayee(CMutableTransaction& txNew, int nBlockHeight, CAmount blockReward, CTxOut& txoutMasternodeRet);
     std::string ToString() const;
 
-    int GetBlockCount() { return mapMasternodeBlocks.size(); }
-    int GetVoteCount() { return mapMasternodePaymentVotes.size(); }
+    int GetBlockCount();
+    int GetVoteCount();
 
     bool IsEnoughData();
     int GetStorageLimit();

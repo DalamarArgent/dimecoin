@@ -33,6 +33,7 @@
 #include <warnings.h>
 
 #include <memory>
+#include <limits>
 #include <stdint.h>
 
 unsigned int ParseConfirmTarget(const UniValue& value)
@@ -115,9 +116,14 @@ UniValue generateBlocks(std::shared_ptr<CReserveScript> coinbaseScript, int nGen
     int nHeightEnd = 0;
     int nHeight = 0;
 
+    if (nGenerate < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "nblocks must not be negative");
+
     {   // Don't keep cs_main locked
         LOCK(cs_main);
         nHeight = chainActive.Height();
+        if (nGenerate > std::numeric_limits<int>::max() - nHeight)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "nblocks is too large");
         nHeightEnd = nHeight+nGenerate;
     }
     unsigned int nExtraNonce = 0;

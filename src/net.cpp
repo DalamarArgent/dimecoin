@@ -2744,6 +2744,16 @@ void CConnman::RelayTransaction(const CTransaction& tx, const CDataStream& ss)
             vRelayExpirationDash.pop_front();
         }
 
+        // Hard size cap on top of the time-based sweep. The sweep only fires on
+        // the write path, so a sustained insert rate can grow the map between
+        // sweeps. Evict oldest-first until below the cap before inserting the
+        // new entry, so the new insertion respects the same budget.
+        while (mapRelayDash.size() >= MAX_RELAY_DASH_ENTRIES && !vRelayExpirationDash.empty())
+        {
+            mapRelayDash.erase(vRelayExpirationDash.front().second);
+            vRelayExpirationDash.pop_front();
+        }
+
         // Save original serialized message so newer versions are preserved
         mapRelayDash.insert(std::make_pair(inv, ss));
         vRelayExpirationDash.push_back(std::make_pair(GetTime() + 15 * 60, inv));

@@ -11,6 +11,7 @@
 #include <script/standard.h>
 #include <sync.h>
 #include <util/system.h>
+#include <util/strencodings.h>
 #include <util/time.h>
 #include <wallet/wallet.h>
 #include <merkleblock.h>
@@ -57,9 +58,14 @@ static std::string DecodeDumpString(const std::string &str) {
     for (unsigned int pos = 0; pos < str.length(); pos++) {
         unsigned char c = str[pos];
         if (c == '%' && pos+2 < str.length()) {
-            c = (((str[pos+1]>>6)*9+((str[pos+1]-'0')&15)) << 4) | 
-                ((str[pos+2]>>6)*9+((str[pos+2]-'0')&15));
-            pos += 2;
+            signed char h1 = HexDigit(str[pos+1]);
+            signed char h2 = HexDigit(str[pos+2]);
+            if (h1 >= 0 && h2 >= 0) {
+                c = static_cast<unsigned char>((h1 << 4) | h2);
+                pos += 2;
+            }
+            // Malformed escape: emit '%' literally rather than silently
+            // decoding non-hex characters to arbitrary nibble values.
         }
         ret << c;
     }

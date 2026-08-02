@@ -49,7 +49,11 @@
 uint64_t nLastBlockTx = 0;
 uint64_t nLastBlockWeight = 0;
 int64_t nLastMiningActivityTime = 0;
-int64_t nLastCoinStakeSearchInterval = 0;
+std::atomic<int64_t> nLastCoinStakeSearchInterval{0};
+
+//! Search time of the previous stake round. Held at file scope because a fresh
+//! BlockAssembler is constructed for every round, so a member cannot carry it.
+static std::atomic<int64_t> nPrevCoinStakeSearchTime{0};
 
 #ifdef ENABLE_WALLET
 //! forward declaration from wallet/wallet.cpp
@@ -148,7 +152,6 @@ static BlockAssembler::Options DefaultOptions(const CChainParams& params)
 BlockAssembler::BlockAssembler(const CChainParams& params) :
     BlockAssembler(params, DefaultOptions(params))
 {
-    nLastCoinStakeSearchInterval = GetAdjustedTime();
 }
 
 void BlockAssembler::resetBlock()
@@ -248,7 +251,11 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(CWallet *wallet, 
                 pblocktemplate->vTxSigOpsCost.push_back(WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[1]));
                 fStakeFound = true;
             }
-            nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
+            const int64_t nPrevSearchTime = nPrevCoinStakeSearchTime.load();
+            if (nPrevSearchTime > 0 && nSearchTime > nPrevSearchTime) {
+                nLastCoinStakeSearchInterval = nSearchTime - nPrevSearchTime;
+            }
+            nPrevCoinStakeSearchTime = nSearchTime;
             nLastCoinStakeSearchTime = nSearchTime;
         }
         if (!fStakeFound)

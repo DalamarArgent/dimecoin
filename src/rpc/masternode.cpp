@@ -410,11 +410,11 @@ static UniValue masternode(const JSONRPCRequest& request)
         {
             LOCK(cs_main);
             pindex = chainActive.Tip();
+            if (!pindex) {
+                throw JSONRPCError(RPC_INTERNAL_ERROR, "No active chain tip available");
+            }
+            nHeight = pindex->nHeight + (strCommand == "current" ? 1 : 10);
         }
-        if (!pindex) {
-            throw JSONRPCError(RPC_INTERNAL_ERROR, "No active chain tip available");
-        }
-        nHeight = pindex->nHeight + (strCommand == "current" ? 1 : 10);
         mnodeman.UpdateLastPaid(pindex);
 
         if(!mnodeman.GetNextMasternodeInQueueForPayment(nHeight, true, nCount, mnInfo))

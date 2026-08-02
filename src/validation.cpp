@@ -2277,7 +2277,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
 
         bool haveFoundationPayment = false;
         for (unsigned int foundationIndex = 0; foundationIndex < coinbaseTransaction->vout.size(); foundationIndex++) {
-           CAmount expectedFoundationAmount = GetFoundationPayment(pindex->nHeight, GetBlockSubsidy(pindex->nHeight, Params().GetConsensus()));
+           CAmount expectedFoundationAmount = GetFoundationPayment(pindex->nHeight, GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus()));
            CAmount actualFoundationAmount = coinbaseTransaction->vout[foundationIndex].nValue;
            bool correctAddress = coinbaseTransaction->vout[foundationIndex].scriptPubKey == GetFoundationScript();
            bool correctAmount = actualFoundationAmount >= expectedFoundationAmount;
@@ -3143,7 +3143,11 @@ static void AcceptProofOfStakeBlock(const CBlock &block, CBlockIndex *pindexNew)
     pindexNew->SetStakeModifier(nStakeModifier, fGeneratedStakeModifier);
     pindexNew->nStakeModifierChecksum = GetStakeModifierChecksum(pindexNew);
     if (!IsTestnet() && !CheckStakeModifierCheckpoints(pindexNew->nHeight, pindexNew->nStakeModifierChecksum)) {
-        LogPrintf("AcceptProofOfStakeBlock() : Rejected by stake modifier checkpoint height=%d, modifier=%s \n", pindexNew->nHeight, std::to_string(nStakeModifier));
+        //! Deliberately not a rejection: the block is accepted regardless. Enforcing this
+        //  checkpoint would change a validation outcome, i.e. a consensus change. The message
+        //  used to read "Rejected by ..." and was mistaken for an actual rejection during
+        //  diagnosis, so it states plainly that nothing is enforced here.
+        LogPrintf("AcceptProofOfStakeBlock() : stake modifier checkpoint mismatch (not enforced, block accepted) height=%d, modifier=%s \n", pindexNew->nHeight, std::to_string(nStakeModifier));
     }
 
     setDirtyBlockIndex.insert(pindexNew);

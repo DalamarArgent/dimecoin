@@ -78,6 +78,15 @@ static const bool DEFAULT_UPNP = false;
 static const size_t MAPASKFOR_MAX_SZ = MAX_INV_SZ;
 /** The maximum number of entries in setAskFor (larger due to getdata latency)*/
 static const size_t SETASKFOR_MAX_SZ = 2 * MAX_INV_SZ;
+/** The maximum number of entries in mapRelayDash. The only inserters are
+ *  masternode-only PrivateSend collateral-fee relays (see
+ *  privatesend-server.cpp), which are throttled by PrivateSend's own session
+ *  and fee cadence. The map already has a 15-minute time-based sweep, but the
+ *  sweep only runs on the write path, so a sustained burst can grow the map
+ *  arbitrarily between sweeps. This cap is defence-in-depth: it bounds worst
+ *  case memory to a few MB and is well above the realistic in-flight
+ *  collateral working set. */
+static const size_t MAX_RELAY_DASH_ENTRIES = 5000;
 /** The maximum number of peer connections to maintain. */
 static const unsigned int DEFAULT_MAX_PEER_CONNECTIONS = 125;
 /** The default for -maxuploadtarget. 0 = Unlimited */

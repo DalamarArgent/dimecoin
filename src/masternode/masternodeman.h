@@ -163,6 +163,11 @@ public:
     /// Masternode nProtocolVersion should match or be above the one specified in param here.
     int CountEnabled(int nProtocolVersion = -1) const;
 
+    /// Take the list size and both enabled counts under a single lock.
+    /// Reading them through separate calls lets the list change in between, so the three
+    /// numbers can describe different states of the masternode list.
+    void GetCountsSnapshot(int& nSizeRet, int& nCountEnabledProtoRet, int& nCountEnabledRet, int nProtocolVersion) const;
+
     /// Count Masternodes by network type - NET_IPV4, NET_IPV6, NET_ONION
     // int CountByIP(int nNetworkType);
 

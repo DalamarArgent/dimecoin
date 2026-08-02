@@ -457,6 +457,23 @@ int CMasternodeMan::CountEnabled(int nProtocolVersion) const
     return nCount;
 }
 
+void CMasternodeMan::GetCountsSnapshot(int& nSizeRet, int& nCountEnabledProtoRet, int& nCountEnabledRet, int nProtocolVersion) const
+{
+    LOCK(cs);
+
+    const int nMinProto = mnpayments.GetMinMasternodePaymentsProto();
+
+    nSizeRet = (int)mapMasternodes.size();
+    nCountEnabledProtoRet = 0;
+    nCountEnabledRet = 0;
+
+    for (auto& mnpair : mapMasternodes) {
+        if (!mnpair.second.IsEnabled()) continue;
+        if (mnpair.second.nProtocolVersion >= nProtocolVersion) nCountEnabledProtoRet++;
+        if (mnpair.second.nProtocolVersion >= nMinProto) nCountEnabledRet++;
+    }
+}
+
 /* Only IPv4 masternodes are allowed in 12.1, saving this for later
 int CMasternodeMan::CountByIP(int nNetworkType)
 {

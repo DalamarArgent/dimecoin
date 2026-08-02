@@ -876,12 +876,26 @@ void CMasternodePayments::RequestLowDataPaymentBlocks(CNode* pnode, CConnman& co
 
 std::string CMasternodePayments::ToString() const
 {
+    LOCK2(cs_mapMasternodeBlocks, cs_mapMasternodePaymentVotes);
+
     std::ostringstream info;
 
-    info << "Votes: " << (int)mapMasternodePaymentVotes.size() <<
-            ", Blocks: " << (int)mapMasternodeBlocks.size();
+    info << "Votes: " << CountToInt(mapMasternodePaymentVotes.size()) <<
+            ", Blocks: " << CountToInt(mapMasternodeBlocks.size());
 
     return info.str();
+}
+
+int CMasternodePayments::GetBlockCount()
+{
+    LOCK(cs_mapMasternodeBlocks);
+    return CountToInt(mapMasternodeBlocks.size());
+}
+
+int CMasternodePayments::GetVoteCount()
+{
+    LOCK(cs_mapMasternodePaymentVotes);
+    return CountToInt(mapMasternodePaymentVotes.size());
 }
 
 bool CMasternodePayments::IsEnoughData()

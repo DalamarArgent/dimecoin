@@ -361,6 +361,23 @@ public:
         READWRITE(nHashWatchdogCurrent);
         READWRITE(nTimeWatchdogCurrent);
         READWRITE(mapLastMasternodeObject);
+        if(ser_action.ForRead()) {
+            // CacheMap / CacheMultiMap serialise their own nMaxSize field, so
+            // deserialising governance.dat replaces the MAX_CACHE_SIZE value
+            // set at construction with whatever the on-disk file carried. A
+            // corrupted or tampered cache file could therefore silently disable
+            // (nMaxSize=0) or inflate the cache bound. Force the cap back to
+            // the class constant on load, and clear any cache whose loaded
+            // entry count already exceeds it so PruneLast() re-engages on the
+            // next Insert(). This runs before the version check below because
+            // Clear() does not reset nMaxSize, so the mismatch path would
+            // otherwise keep the poisoned bound.
+            const uint32_t nCap = static_cast<uint32_t>(MAX_CACHE_SIZE);
+            if (mapInvalidVotes.GetSize() > nCap) mapInvalidVotes.Clear();
+            mapInvalidVotes.SetMaxSize(nCap);
+            if (mapOrphanVotes.GetSize() > nCap) mapOrphanVotes.Clear();
+            mapOrphanVotes.SetMaxSize(nCap);
+        }
         if(ser_action.ForRead() && (strVersion != SERIALIZATION_VERSION_STRING)) {
             Clear();
             return;
