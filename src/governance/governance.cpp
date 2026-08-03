@@ -964,6 +964,27 @@ bool CGovernanceManager::ProcessVote(CNode* pfrom, const CGovernanceVote& vote, 
                  << ", MN outpoint = " << vote.GetMasternodeOutpoint().ToString()
                  << ", governance object hash = " << vote.GetParentHash().ToString();
             exception = CGovernanceException(ostr.str(), GOVERNANCE_EXCEPTION_WARNING);
+            // If the signing masternode is already known, verify the vote
+            // signature/format before caching it as an orphan. This stops a peer from
+            // spending an orphan slot on a vote whose signature would fail at replay
+            // time anyway. When the masternode is unknown we intentionally still orphan
+            // the vote, to match the behaviour a 2.3.0 node exhibits: rejecting here
+            // would drop otherwise-valid votes that arrive just before the masternode
+            // broadcast propagates.
+            //
+            // No node penalty is attached deliberately. Validity is judged against our
+            // local masternode list, which legitimately differs between peers, so an
+            // honest relayer can present a vote we happen to score as invalid. Dropping
+            // the vote gives the full anti-DoS benefit without that partition risk.
+            if(mnodeman.Has(vote.GetMasternodeOutpoint()) && !vote.IsValid(true)) {
+                std::ostringstream ostrInvalid;
+                ostrInvalid << "CGovernanceManager::ProcessVote -- Invalid orphan vote "
+                            << ", MN outpoint = " << vote.GetMasternodeOutpoint().ToString()
+                            << ", governance object hash = " << vote.GetParentHash().ToString();
+                LogPrintf("%s\n", ostrInvalid.str());
+                exception = CGovernanceException(ostrInvalid.str(), GOVERNANCE_EXCEPTION_PERMANENT_ERROR);
+                return false;
+            }
             if(mapOrphanVotes.Insert(nHashGovobj, vote_time_pair_t(vote, GetAdjustedTime() + GOVERNANCE_ORPHAN_EXPIRATION_TIME))) {
                 fRequestGovernanceObject = true;
                 nHashGovobjToRequest = nHashGovobj;

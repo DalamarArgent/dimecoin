@@ -38,7 +38,7 @@ CGovernanceObject::CGovernanceObject()
   fExpired(false),
   fUnparsable(false),
   mapCurrentMNVotes(),
-  mapOrphanVotes(),
+  mapOrphanVotes(MAX_ORPHAN_VOTES_PER_OBJECT),
   fileVotes()
 {
     // PARSE JSON DATA STORAGE (STRDATA)
@@ -66,7 +66,7 @@ CGovernanceObject::CGovernanceObject(uint256 nHashParentIn, int nRevisionIn, int
   fExpired(false),
   fUnparsable(false),
   mapCurrentMNVotes(),
-  mapOrphanVotes(),
+  mapOrphanVotes(MAX_ORPHAN_VOTES_PER_OBJECT),
   fileVotes()
 {
     // PARSE JSON DATA STORAGE (STRDATA)

@@ -150,6 +150,7 @@ void CZMQNotificationInterface::UpdatedBlockTip(const CBlockIndex *pindexNew, co
         {
             notifier->Shutdown();
             i = notifiers.erase(i);
+            delete notifier;
         }
     }
 }
@@ -171,6 +172,7 @@ void CZMQNotificationInterface::TransactionAddedToMempool(const CTransactionRef&
         {
             notifier->Shutdown();
             i = notifiers.erase(i);
+            delete notifier;
         }
     }
 }

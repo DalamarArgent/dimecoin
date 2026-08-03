@@ -501,10 +501,10 @@ bool CPrivateSendClient::SignFinalTransaction(const CTransaction& finalTransacti
     finalMutableTransaction = finalTransactionNew;
     LogPrintf("CPrivateSendClient::SignFinalTransaction -- finalMutableTransaction=%s", finalMutableTransaction.ToString());
 
-    // Make sure it's BIP69 compliant
-    std::shuffle(finalMutableTransaction.vin.begin(), finalMutableTransaction.vin.end(), FastRandomContext());
-    std::shuffle(finalMutableTransaction.vout.begin(), finalMutableTransaction.vout.end(), FastRandomContext());
-
+    // Do not reshuffle vin/vout here: the server delivers the final canonical
+    // ordering and we must sign that exact transaction. Reshuffling produced a
+    // different tx hash on the client and made this integrity check falsely
+    // trip. Structural sanity of our own entries is enforced below.
     if(finalMutableTransaction.GetHash() != finalTransactionNew.GetHash()) {
         LogPrintf("CPrivateSendClient::SignFinalTransaction -- WARNING! Masternode %s is not BIP69 compliant!\n", infoMixingMasternode.vin.prevout.ToString());
         UnlockCoins();

@@ -1217,6 +1217,9 @@ UniValue getblockchaininfo(const JSONRPCRequest& request)
     LOCK(cs_main);
 
     CBlockIndex* tip = chainActive.Tip();
+    if (!tip) {
+        throw JSONRPCError(RPC_IN_WARMUP, "No active chain tip available");
+    }
     const Consensus::Params& consensusParams = Params().GetConsensus();
 
     UniValue obj(UniValue::VOBJ);

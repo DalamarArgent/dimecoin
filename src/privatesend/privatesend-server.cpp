@@ -264,6 +264,23 @@ void CPrivateSendServer::ProcessMessage(CNode* pfrom, std::string& strCommand, C
             return;
         }
 
+        // Only accept signature submissions from peers that actually joined this
+        // session via DSVIN. Without this, any P2P peer could send a bad
+        // signature payload and trip AddScriptSig -> RelayStatus(REJECTED), which
+        // would tear down an otherwise-valid mixing session for the real
+        // participants.
+        bool fParticipant = false;
+        for(const CDarkSendEntry& entry : vecEntries) {
+            if(entry.addr == pfrom->addr) {
+                fParticipant = true;
+                break;
+            }
+        }
+        if(!fParticipant) {
+            LogPrint(BCLog::PRIVATESEND, "DSSIGNFINALTX -- ignored, %s is not a session participant\n", pfrom->addr.ToString());
+            return;
+        }
+
         std::vector<CTxIn> vecTxIn;
         vRecv >> vecTxIn;
 
@@ -511,7 +528,7 @@ void CPrivateSendServer::ChargeRandomFees(CConnman& connman)
 
     for(const CTransactionRef& txCollateral : vecSessionCollaterals) {
 
-        if(GetRandInt(100) > 10) return;
+        if(GetRandInt(100) > 10) continue;
 
         LogPrintf("CPrivateSendServer::ChargeRandomFees -- charging random fees, txCollateral=%s", txCollateral->ToString());
 

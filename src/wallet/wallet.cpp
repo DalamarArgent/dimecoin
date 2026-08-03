@@ -3429,6 +3429,16 @@ void InsertAndAdjustFoundationPayment(CMutableTransaction &tx, const CTxOut &txo
     {
         long foundationOutIndex = std::distance(std::begin(tx.vout), it);
         auto foundationPayment = tx.vout[foundationOutIndex].nValue;
+        // Defensive: all current callers guarantee tx.vout.size() >= 3 at this point
+        // (PoW: [coinbase, masternode] + foundation just pushed = 3; PoS: [marker, staker(+split),
+        // masternode] + foundation = 4 or 5). Bail out rather than dereferencing an out-of-range
+        // index if a future caller ever violates that invariant -- tx.vout.size() is unsigned,
+        // so size()-3 with size<3 underflows and tx.vout[i] would be undefined behaviour.
+        if (tx.vout.size() < 3) {
+            LogPrintf("%s: unexpected vout layout (size=%u); skipping foundation adjustment\n",
+                      __func__, static_cast<unsigned int>(tx.vout.size()));
+            return;
+        }
         long i = tx.vout.size() - 3;
         tx.vout[i].nValue -= foundationPayment; // last vout is foundation payment.
     }
