@@ -3465,7 +3465,7 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, CMu
     std::vector<CTransactionRef> vwtxPrev;
     CAmount nValueIn = 0;
     std::vector<COutput> vAvailableCoins;
-    AvailableCoins(vAvailableCoins, true, nullptr, 1, MAX_MONEY, MAX_MONEY, 0, 0, 9999999);
+    AvailableCoins(vAvailableCoins, true, nullptr, params.nStakeMinAmount, MAX_MONEY, MAX_MONEY, 0, params.nStakeMinDepth, 9999999);
 
     bool bnb_used;
     CCoinControl coin_control;
@@ -3594,7 +3594,9 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, CMu
         CTransactionRef tx;
         try {
             file >> header;
-            fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
+            if (fseek(file.Get(), postx.nTxOffset, SEEK_CUR) != 0) {
+                return error("%s() : fseek failed in CreateCoinStake()", __PRETTY_FUNCTION__);
+            }
             file >> tx;
         } catch (std::exception &e) {
             return error("%s() : deserialize or I/O error in CreateCoinStake()", __PRETTY_FUNCTION__);

@@ -582,6 +582,9 @@ static UniValue sendtoaddress(const JSONRPCRequest& request)
     if (!request.params[4].isNull())
     {
         amountOfSplits = request.params[4].get_int();
+        if (amountOfSplits < 1) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Amount of splits must be at least 1");
+        }
     }
 
     bool fSubtractFeeFromAmount = false;
@@ -2257,7 +2260,7 @@ static UniValue listsinceblock(const JSONRPCRequest& request)
     UniValue transactions(UniValue::VARR);
 
     for (const std::pair<uint256, CWalletTx>& pairWtx : pwallet->mapWallet) {
-        CWalletTx tx = pairWtx.second;
+        const CWalletTx& tx = pairWtx.second;
 
         if (depth == -1 || tx.GetDepthInMainChain() < depth) {
             ListTransactions(pwallet, tx, "*", 0, true, transactions, filter);
@@ -3195,12 +3198,8 @@ static UniValue listunspent(const JSONRPCRequest& request)
 
     UniValue results(UniValue::VARR);
     std::vector<COutput> vecOutputs;
-    {
-        LOCK2(cs_main, pwallet->cs_wallet);
-        pwallet->AvailableCoins(vecOutputs, !include_unsafe, nullptr, nMinimumAmount, nMaximumAmount, nMinimumSumAmount, nMaximumCount, nMinDepth, nMaxDepth);
-    }
-
-    LOCK(pwallet->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
+    pwallet->AvailableCoins(vecOutputs, !include_unsafe, nullptr, nMinimumAmount, nMaximumAmount, nMinimumSumAmount, nMaximumCount, nMinDepth, nMaxDepth);
 
     for (const COutput& out : vecOutputs) {
         CTxDestination address;
@@ -3690,7 +3689,11 @@ UniValue generate(const JSONRPCRequest& request)
     int num_generate = request.params[0].get_int();
     uint64_t max_tries = 1000000;
     if (!request.params[1].isNull()) {
-        max_tries = request.params[1].get_int();
+        int max_tries_arg = request.params[1].get_int();
+        if (max_tries_arg < 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "maxtries must be non-negative");
+        }
+        max_tries = static_cast<uint64_t>(max_tries_arg);
     }
 
     std::shared_ptr<CReserveScript> coinbase_script;

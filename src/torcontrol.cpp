@@ -15,6 +15,9 @@
 #include <deque>
 #include <set>
 #include <stdlib.h>
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
 
 #include <boost/bind.hpp>
 #include <boost/signals2/signal.hpp>
@@ -405,6 +408,10 @@ static bool WriteBinaryFile(const fs::path &filename, const std::string &data)
         return false;
     }
     fclose(f);
+#ifndef WIN32
+    // Restrict access to the owner: the hidden service private key is sensitive.
+    chmod(filename.string().c_str(), S_IRUSR | S_IWUSR);
+#endif
     return true;
 }
 
@@ -539,7 +546,7 @@ void TorController::auth_cb(TorControlConnection& _conn, const TorControlReply& 
 
         // Finally - now create the service
         if (private_key.empty()) // No private key, generate one
-            private_key = "NEW:RSA1024"; // Explicitly request RSA1024 - see issue #9214
+            private_key = "NEW:BEST"; // Let Tor pick the best supported key type (ED25519-V3 on modern Tor)
         // Request hidden service, redirect port.
         // Note that the 'virtual' port doesn't have to be the same as our internal port, but this is just a convenient
         // choice.  TODO; refactor the shutdown sequence some day.

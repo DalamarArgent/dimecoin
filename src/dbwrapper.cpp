@@ -203,7 +203,12 @@ size_t CDBWrapper::DynamicMemoryUsage() const {
         LogPrint(BCLog::LEVELDB, "Failed to get approximate-memory-usage property\n");
         return 0;
     }
-    return stoul(memory);
+    try {
+        return std::stoul(memory);
+    } catch (const std::logic_error&) {
+        LogPrint(BCLog::LEVELDB, "Failed to parse approximate-memory-usage property\n");
+        return 0;
+    }
 }
 
 // Prefixed with null character to avoid collisions with other keys

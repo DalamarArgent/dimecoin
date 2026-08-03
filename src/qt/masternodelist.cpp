@@ -430,6 +430,8 @@ void MasternodeList::on_startMissingButton_clicked()
         StartAll("start-missing");
         return;
     }
+
+    StartAll("start-missing");
 }
 
 void MasternodeList::on_tableWidgetMyMasternodes_itemSelectionChanged()

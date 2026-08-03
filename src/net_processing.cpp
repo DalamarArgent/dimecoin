@@ -1131,12 +1131,17 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return mapSporks.count(inv.hash);
 
     case MSG_MASTERNODE_PAYMENT_VOTE:
-        return mnpayments.mapMasternodePaymentVotes.count(inv.hash);
+        {
+            LOCK(cs_mapMasternodePaymentVotes);
+            return mnpayments.mapMasternodePaymentVotes.count(inv.hash);
+        }
 
     case MSG_MASTERNODE_PAYMENT_BLOCK:
         {
             BlockMap::iterator mi = mapBlockIndex.find(inv.hash);
-            return mi != mapBlockIndex.end() && mnpayments.mapMasternodeBlocks.find(mi->second->nHeight) != mnpayments.mapMasternodeBlocks.end();
+            if (mi == mapBlockIndex.end()) return false;
+            LOCK(cs_mapMasternodeBlocks);
+            return mnpayments.mapMasternodeBlocks.find(mi->second->nHeight) != mnpayments.mapMasternodeBlocks.end();
         }
 
     case MSG_MASTERNODE_ANNOUNCE:
@@ -1428,10 +1433,12 @@ void static ProcessGetData(CNode* pfrom, const CChainParams& chainparams, CConnm
                 }
 
                 if (!pushed && inv.type == MSG_MASTERNODE_PAYMENT_VOTE) {
-                    if(mnpayments.HasVerifiedPaymentVote(inv.hash)) {
+                    LOCK(cs_mapMasternodePaymentVotes);
+                    auto mi = mnpayments.mapMasternodePaymentVotes.find(inv.hash);
+                    if (mi != mnpayments.mapMasternodePaymentVotes.end() && mi->second.IsVerified()) {
                         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
                         ss.reserve(1000);
-                        ss << mnpayments.mapMasternodePaymentVotes[inv.hash];
+                        ss << mi->second;
                         connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::MASTERNODEPAYMENTVOTE, ss));
                         pushed = true;
                     }
@@ -1439,15 +1446,16 @@ void static ProcessGetData(CNode* pfrom, const CChainParams& chainparams, CConnm
 
                 if (!pushed && inv.type == MSG_MASTERNODE_PAYMENT_BLOCK) {
                     BlockMap::iterator mi = mapBlockIndex.find(inv.hash);
-                    LOCK(cs_mapMasternodeBlocks);
+                    LOCK2(cs_mapMasternodeBlocks, cs_mapMasternodePaymentVotes);
                     if (mi != mapBlockIndex.end() && mnpayments.mapMasternodeBlocks.count(mi->second->nHeight)) {
                         for (CMasternodePayee& payee : mnpayments.mapMasternodeBlocks[mi->second->nHeight].vecPayees) {
                             std::vector<uint256> vecVoteHashes = payee.GetVoteHashes();
                             for (uint256& hash : vecVoteHashes) {
-                                if(mnpayments.HasVerifiedPaymentVote(hash)) {
+                                auto itv = mnpayments.mapMasternodePaymentVotes.find(hash);
+                                if (itv != mnpayments.mapMasternodePaymentVotes.end() && itv->second.IsVerified()) {
                                     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
                                     ss.reserve(1000);
-                                    ss << mnpayments.mapMasternodePaymentVotes[hash];
+                                    ss << itv->second;
                                     connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::MASTERNODEPAYMENTVOTE, ss));
                                 }
                             }
@@ -2257,6 +2265,8 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
         if (locator.vHave.size() > MAX_LOCATOR_SZ) {
             LogPrint(BCLog::NET, "getblocks locator size %lld > %d, disconnect peer=%d\n", locator.vHave.size(), MAX_LOCATOR_SZ, pfrom->GetId());
+            LOCK(cs_main);
+            Misbehaving(pfrom->GetId(), 20, strprintf("oversized-locator getblocks vHave.size()=%u", (unsigned)locator.vHave.size()));
             pfrom->fDisconnect = true;
             return true;
         }
@@ -2372,6 +2382,8 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
         if (locator.vHave.size() > MAX_LOCATOR_SZ) {
             LogPrint(BCLog::NET, "getheaders locator size %lld > %d, disconnect peer=%d\n", locator.vHave.size(), MAX_LOCATOR_SZ, pfrom->GetId());
+            LOCK(cs_main);
+            Misbehaving(pfrom->GetId(), 20, strprintf("oversized-locator getheaders vHave.size()=%u", (unsigned)locator.vHave.size()));
             pfrom->fDisconnect = true;
             return true;
         }
@@ -2937,7 +2949,15 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
         headers.resize(nCount);
         for (unsigned int n = 0; n < nCount; n++) {
             vRecv >> headers[n];
-            ReadCompactSize(vRecv); // ignore tx count; assume it is 0.
+            if (ReadCompactSize(vRecv) != 0) {
+                // A non-zero tx count desynchronises the stream, so the remaining
+                // headers in this message cannot be parsed. Drop the message, but
+                // do not apply a ban score: upstream merely ignores this field, and
+                // a new ban rule on a P2P message risks partitioning us from honest
+                // peers for no gain -- the unparsed headers are simply not accepted.
+                LogPrint(BCLog::NET, "non-zero tx count in headers message from peer=%d, dropping message\n", pfrom->GetId());
+                return false;
+            }
         }
 
         // Headers received via a HEADERS message should be valid, and reflect
@@ -4207,9 +4227,8 @@ bool PeerLogicValidation::SendMessages(CNode* pto)
 
 void ThreadProcessExtensions(CConnman *pConnman)
 {
-    static bool fOneThread;
-    if(fOneThread) return;
-    fOneThread = true;
+    static std::atomic<bool> fOneThread(false);
+    if (fOneThread.exchange(true)) return;
 
     // Make this thread recognisable as the PrivateSend thread
     RenameThread("bitcoin-ps");

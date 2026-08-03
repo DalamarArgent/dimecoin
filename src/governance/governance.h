@@ -139,6 +139,19 @@ public:
         READWRITE(nDataStart);
         READWRITE(nDataEnd);
         READWRITE(fBufferEmpty);
+        if(ser_action.ForRead()) {
+            // Reject on-disk state whose bookkeeping would index out of range on
+            // the next AddTimestamp / GetMinTimestamp / GetMaxTimestamp call.
+            const int nSize = static_cast<int>(vecTimestamps.size());
+            if(nSize != RATE_BUFFER_SIZE ||
+               nDataStart < 0 || nDataStart >= nSize ||
+               nDataEnd < 0 || nDataEnd >= nSize) {
+                vecTimestamps.assign(RATE_BUFFER_SIZE, 0);
+                nDataStart = 0;
+                nDataEnd = 0;
+                fBufferEmpty = true;
+            }
+        }
     }
 };
 

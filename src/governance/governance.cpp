@@ -25,6 +25,10 @@ const std::string CGovernanceManager::SERIALIZATION_VERSION_STRING = "CGovernanc
 const int CGovernanceManager::MAX_TIME_FUTURE_DEVIATION = 60*60;
 const int CGovernanceManager::RELIABLE_PROPAGATION_TIME = 60;
 
+//! Upper bound on mapMasternodeOrphanObjects; per-outpoint cap alone leaves
+//  overall growth unbounded across attacker-crafted outpoints.
+static const size_t MAX_MASTERNODE_ORPHAN_OBJECTS = 5000;
+
 CGovernanceManager::CGovernanceManager()
     : nTimeLastDiff(0),
       nCachedBlockHeight(0),
@@ -210,6 +214,11 @@ void CGovernanceManager::ProcessMessage(CNode* pfrom, const std::string& strComm
                     // ask for this object again in 2 minutes
                     CInv inv(MSG_GOVERNANCE_OBJECT, govobj.GetHash());
                     pfrom->AskFor(inv);
+                    return;
+                }
+                if (mapMasternodeOrphanObjects.size() >= MAX_MASTERNODE_ORPHAN_OBJECTS) {
+                    LogPrint(BCLog::GOBJECT, "MNGOVERNANCEOBJECT -- Global orphan object limit reached (%zu), dropping object %s\n",
+                             mapMasternodeOrphanObjects.size(), strHash);
                     return;
                 }
 

@@ -346,6 +346,7 @@ public:
     }
     WalletBalances getBalances() override
     {
+        LOCK2(::cs_main, m_wallet.cs_wallet);
         WalletBalances result;
         result.balance = m_wallet.GetBalance();
         result.unconfirmed_balance = m_wallet.GetUnconfirmedBalance();

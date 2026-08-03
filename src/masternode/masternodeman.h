@@ -189,7 +189,10 @@ public:
     /// Find a random entry
     masternode_info_t FindRandomNotInVec(const std::vector<COutPoint> &vecToExclude, int nProtocolVersion = -1);
 
-    std::map<COutPoint, CMasternode> GetFullMasternodeMap() { return mapMasternodes; }
+    std::map<COutPoint, CMasternode> GetFullMasternodeMap() { LOCK(cs); return mapMasternodes; }
+
+    /// Erase an entry from mapSeenMasternodeBroadcast under cs.
+    void EraseSeenBroadcast(const uint256& hash) { LOCK(cs); mapSeenMasternodeBroadcast.erase(hash); }
 
     bool GetMasternodeRanks(rank_pair_vec_t& vecMasternodeRanksRet, int nBlockHeight = -1, int nMinProtocol = 0);
     bool GetMasternodeRank(const COutPoint &outpoint, int& nRankRet, int nBlockHeight = -1, int nMinProtocol = 0);

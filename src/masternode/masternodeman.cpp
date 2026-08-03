@@ -215,15 +215,19 @@ void CMasternodeMan::CheckAndRemove(CConnman& connman)
 
         //! note the duplicates (collateral oldest stays)
         std::vector<CMasternode> toBan;
+        std::map<COutPoint, uint32_t> mapCollateralAges;
+        for (const auto &mn : mapMasternodes) {
+            mapCollateralAges[mn.second.vin.prevout] = GetUTXOConfirmations(mn.second.vin.prevout);
+        }
         for (const auto &mn : mapMasternodes) {
             CService mnAddress = mn.second.addr;
-            uint32_t mnCollateralAge = GetUTXOConfirmations(mn.second.vin.prevout);
+            uint32_t mnCollateralAge = mapCollateralAges[mn.second.vin.prevout];
             for (const auto &mn2 : mapMasternodes) {
                 //! skip if we're comparing the exact same mn
                 if (mn == mn2) continue;
                 CService mnAddress2 = mn2.second.addr;
                 if (mnAddress == mnAddress2) {
-                    uint32_t mnCollateralAge2 = GetUTXOConfirmations(mn2.second.vin.prevout);
+                    uint32_t mnCollateralAge2 = mapCollateralAges[mn2.second.vin.prevout];
                     //! we've a match, find out who is oldest
                     if (mnCollateralAge > mnCollateralAge2) {
                         toBan.push_back(mn2.second);
@@ -1139,7 +1143,7 @@ bool CMasternodeMan::SendVerifyRequest(const CAddress& addr, const std::vector<C
 
     netfulfilledman.AddFulfilledRequest(addr, strprintf("%s", NetMsgType::MNVERIFY)+"-request");
     // use random nonce, store it and require node to reply with correct one later
-    CMasternodeVerification mnv(addr, GetRandInt(999999), nCachedBlockHeight - 1);
+    CMasternodeVerification mnv(addr, GetRandInt(std::numeric_limits<int>::max()), nCachedBlockHeight - 1);
     mWeAskedForVerification[addr] = mnv;
     LogPrintf("CMasternodeMan::SendVerifyRequest -- verifying node using nonce %d addr=%s\n", mnv.nonce, addr.ToString());
     connman.PushMessage(pnode, CNetMsgMaker(pnode->GetSendVersion()).Make(NetMsgType::MNVERIFY, mnv));
@@ -1317,7 +1321,6 @@ void CMasternodeMan::ProcessVerifyBroadcast(CNode* pnode, const CMasternodeVerif
         // we already have one
         return;
     }
-    mapSeenMasternodeVerification[mnv.GetHash()] = mnv;
 
     // we don't care about history
     if(mnv.nBlockHeight < nCachedBlockHeight - MAX_POSE_BLOCKS) {
@@ -1389,6 +1392,8 @@ void CMasternodeMan::ProcessVerifyBroadcast(CNode* pnode, const CMasternodeVerif
             LogPrint(BCLog::MASTERNODE, "CMasternodeMan::ProcessVerifyBroadcast -- VerifyMessage() for masternode2 failed, error: %s\n", strError);
             return;
         }
+
+        mapSeenMasternodeVerification[mnv.GetHash()] = mnv;
 
         if(!pmn1->IsPoSeVerified()) {
             pmn1->DecreasePoSeBanScore();

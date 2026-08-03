@@ -205,6 +205,14 @@ Result CreateTransaction(const CWallet* wallet, const uint256& txid, const CCoin
         mtx.vout.erase(mtx.vout.begin() + nOutput);
     }
 
+    // Re-check maxTxFee after any dust-to-fee conversion above, which could
+    // have pushed new_fee above the safety limit without a further check.
+    if (new_fee > maxTxFee) {
+        errors.push_back(strprintf("Specified or calculated fee %s is too high (cannot be higher than maxTxFee %s) after discarding dust change output",
+                                   FormatMoney(new_fee), FormatMoney(maxTxFee)));
+        return Result::WALLET_ERROR;
+    }
+
     // Mark new tx not replaceable, if requested.
     if (!coin_control.m_signal_bip125_rbf.get_value_or(wallet->m_signal_rbf)) {
         for (auto& input : mtx.vin) {
