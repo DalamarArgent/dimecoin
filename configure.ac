@@ -3,7 +3,7 @@ AC_PREREQ([2.60])
 m4_define(_CLIENT_VERSION_MAJOR, 2)
 m4_define(_CLIENT_VERSION_MINOR, 5)
 m4_define(_CLIENT_VERSION_REVISION, 5)
-m4_define(_CLIENT_VERSION_BUILD, 5)
+m4_define(_CLIENT_VERSION_BUILD, 6)
 m4_define(_CLIENT_VERSION_IS_RELEASE, true)
 m4_define(_COPYRIGHT_YEAR, 2023)
 m4_define(_COPYRIGHT_HOLDERS,[The %s developers])
@@ -910,7 +910,9 @@ fi
 if test x$use_boost = xyes; then
 
 dnl Minimum required Boost version
-define(MINIMUM_REQUIRED_BOOST, 1.47.0)
+dnl The tree uses the qualified boost::placeholders:: namespace, which Boost
+dnl only provides from 1.60.0 onwards.
+define(MINIMUM_REQUIRED_BOOST, 1.60.0)
 
 dnl Check for boost libs
 AX_BOOST_BASE([MINIMUM_REQUIRED_BOOST])

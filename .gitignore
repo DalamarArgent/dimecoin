@@ -64,6 +64,9 @@ src/qt/bitcoin-qt.includes
 *.o
 *.o-*
 *.patch
+# Build patches vendored in-tree are tracked deliberately
+!depends/patches/**/*.patch
+!contrib/patches/**/*.patch
 *.a
 *.pb.cc
 *.pb.h
