@@ -29,6 +29,7 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QTextDocument>
+#include <array>
 
 #include <limits>
 
