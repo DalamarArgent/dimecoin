@@ -970,6 +970,9 @@ public:
     int64_t nRelockTime = 0;
 
     bool Unlock(const SecureString& strWalletPassphrase, bool stakingOnly = false);
+    /* Verify a passphrase against the wallet's master keys without altering keystore state.
+       Returns false for an unencrypted wallet, which has no passphrase to prove. */
+    bool CheckPassphrase(const SecureString& strWalletPassphrase) const;
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 

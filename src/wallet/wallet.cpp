@@ -424,9 +424,39 @@ bool CWallet::LoadWatchOnly(const CScript &dest)
     return CCryptoKeyStore::AddWatchOnly(dest);
 }
 
+bool CWallet::CheckPassphrase(const SecureString& strWalletPassphrase) const
+{
+    if (!IsCrypted()) {
+        return false;
+    }
+
+    CCrypter crypter;
+    CKeyingMaterial _vMasterKey;
+
+    LOCK(cs_wallet);
+    for (const MasterKeyMap::value_type& pMasterKey : mapMasterKeys)
+    {
+        if (!crypter.SetKeyFromPassphrase(strWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
+            continue;
+        if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, _vMasterKey))
+            continue;
+        if (_vMasterKey.size() == WALLET_CRYPTO_KEY_SIZE) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool CWallet::Unlock(const SecureString& strWalletPassphrase, bool stakingOnly)
 {
     if (!IsLocked()) {
+        // An already-unlocked wallet still has to prove knowledge of the passphrase. This branch
+        // previously ignored strWalletPassphrase entirely, so any caller who could reach the RPC
+        // port could (a) widen a staking-only unlock to full spend authority and (b) refresh the
+        // relock timer indefinitely, both without knowing the passphrase.
+        if (IsCrypted() && !CheckPassphrase(strWalletPassphrase)) {
+            return false;
+        }
         fWalletUnlockStakingOnly = stakingOnly;
         return true;
     }

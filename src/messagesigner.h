@@ -9,13 +9,15 @@
 #include <key.h>
 #include <script/standard.h>
 
-/** Accept masternode-layer signatures made under the legacy "DarkCoin"/"Dimecoin" message magic
+/** Accept masternode-layer signatures made under a legacy "DarkCoin"/"Dimecoin" message magic
  *  in addition to the currently configured strMessageMagic.
  *
- *  This is migration scaffolding, not a permanent feature. Removal criteria: once a full release
- *  cycle passes with no "accepted N signature(s) using a legacy message magic" warning in
- *  debug.log, drop the fallback, this option, and CMessageSigner::GetLegacyMagicAcceptCount(). */
-static const bool DEFAULT_LEGACY_SIG_MAGIC = true;
+ *  Default OFF as of 2.5.5.7. strMessageMagic now matches production 2.3.0.0 again
+ *  ("Dimecoin Signed Message:\n"), so the fallback is no longer needed for interoperability and
+ *  leaving it on would only widen the set of signatures the masternode layer accepts. Operators
+ *  running a network that still has 2.5.5.6 nodes signing under the "DarkCoin" magic can
+ *  re-enable it temporarily with -legacysigmagic=1. */
+static const bool DEFAULT_LEGACY_SIG_MAGIC = false;
 
 /** Helper class for signing messages and checking their signatures
  */

@@ -253,7 +253,7 @@ std::atomic_bool g_is_mempool_loaded{false};
 /** Constant stuff for coinbase transactions we create: */
 CScript COINBASE_FLAGS;
 
-const std::string strMessageMagic = "DarkCoin Signed Message:\n";
+const std::string strMessageMagic = "Dimecoin Signed Message:\n";
 
 // Internal stuff
 namespace {
@@ -2704,6 +2704,15 @@ bool CChainState::ConnectTip(CValidationState& state, const CChainParams& chainp
  * Return the tip of the chain with the most work in it, that isn't
  * known to be invalid (it's however far from certain to be valid).
  */
+/** Effective reorganization depth limit: the chain parameter unless overridden with
+ *  -maxreorgdepth. Zero disables the limit, restoring pre-2.5.5.7 behaviour, which is the escape
+ *  hatch if a legitimate deep reorg ever needs to be accepted. */
+static int GetMaxReorganizationDepth()
+{
+    static const int nDepth = gArgs.GetArg("-maxreorgdepth", Params().MaxReorganizationDepth());
+    return nDepth;
+}
+
 CBlockIndex* CChainState::FindMostWorkChain() {
     do {
         CBlockIndex *pindexNew = nullptr;
@@ -2753,6 +2762,35 @@ CBlockIndex* CChainState::FindMostWorkChain() {
             }
             pindexTest = pindexTest->pprev;
         }
+
+        // Reject candidates that would require reorganising deeper than the chain parameters
+        // permit. nMaxReorganizationDepth was configured for all three networks but never read by
+        // anything, so a node would follow a reorg of unbounded depth - the closing move of a
+        // majority-hashrate or stake-grinding attack. Rejecting the candidate here rather than in
+        // ActivateBestChainStep lets the search fall through to the next-best candidate instead
+        // of failing chain activation outright.
+        //
+        // Deliberately not applied during initial block download: while syncing, switching
+        // between candidate chains is routine and does not undo history this node ever treated as
+        // settled. A node returning from an outage longer than the limit is still in IBD (its tip
+        // is beyond nMaxTipAge), so it recovers normally.
+        if (!fInvalidAncestor && chainActive.Tip() && !IsInitialBlockDownload()) {
+            const int nMaxDepth = GetMaxReorganizationDepth();
+            if (nMaxDepth > 0) {
+                const CBlockIndex* pindexFork = chainActive.FindFork(pindexNew);
+                const int nDepth = pindexFork ? chainActive.Tip()->nHeight - pindexFork->nHeight
+                                              : chainActive.Tip()->nHeight + 1;
+                if (nDepth > nMaxDepth) {
+                    LogPrintf("%s: REFUSING candidate tip %s (height %d): would reorganise %d blocks, "
+                              "limit is %d. Use -maxreorgdepth=0 to disable this protection.\n",
+                              __func__, pindexNew->GetBlockHash().ToString(), pindexNew->nHeight,
+                              nDepth, nMaxDepth);
+                    setBlockIndexCandidates.erase(pindexNew);
+                    continue;
+                }
+            }
+        }
+
         if (!fInvalidAncestor)
             return pindexNew;
     } while(true);
