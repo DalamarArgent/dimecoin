@@ -2714,12 +2714,21 @@ static int GetMaxReorganizationDepth()
 }
 
 CBlockIndex* CChainState::FindMostWorkChain() {
+    // Candidates passed over because they would require too deep a reorganisation. They are held
+    // here rather than erased from setBlockIndexCandidates: those blocks are perfectly valid, and
+    // CheckBlockIndex() asserts that a valid block sorting at least as well as the tip is present
+    // in that set. Skipping them locally keeps the invariant intact while still refusing the reorg.
+    std::set<const CBlockIndex*> setTooDeep;
+
     do {
         CBlockIndex *pindexNew = nullptr;
 
-        // Find the best candidate header.
+        // Find the best candidate header we have not already refused.
         {
             std::set<CBlockIndex*, CBlockIndexWorkComparator>::reverse_iterator it = setBlockIndexCandidates.rbegin();
+            while (it != setBlockIndexCandidates.rend() && setTooDeep.count(*it)) {
+                ++it;
+            }
             if (it == setBlockIndexCandidates.rend())
                 return nullptr;
             pindexNew = *it;
@@ -2766,9 +2775,9 @@ CBlockIndex* CChainState::FindMostWorkChain() {
         // Reject candidates that would require reorganising deeper than the chain parameters
         // permit. nMaxReorganizationDepth was configured for all three networks but never read by
         // anything, so a node would follow a reorg of unbounded depth - the closing move of a
-        // majority-hashrate or stake-grinding attack. Rejecting the candidate here rather than in
-        // ActivateBestChainStep lets the search fall through to the next-best candidate instead
-        // of failing chain activation outright.
+        // majority-hashrate or stake-grinding attack. Passing over the candidate here rather than
+        // failing in ActivateBestChainStep lets the search fall through to the next-best chain,
+        // which in the worst case is the tip we are already on.
         //
         // Deliberately not applied during initial block download: while syncing, switching
         // between candidate chains is routine and does not undo history this node ever treated as
@@ -2785,7 +2794,7 @@ CBlockIndex* CChainState::FindMostWorkChain() {
                               "limit is %d. Use -maxreorgdepth=0 to disable this protection.\n",
                               __func__, pindexNew->GetBlockHash().ToString(), pindexNew->nHeight,
                               nDepth, nMaxDepth);
-                    setBlockIndexCandidates.erase(pindexNew);
+                    setTooDeep.insert(pindexNew);
                     continue;
                 }
             }
