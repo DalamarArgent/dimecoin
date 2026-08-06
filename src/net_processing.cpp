@@ -34,6 +34,7 @@
 #include <util/strencodings.h>
 #include <net_processing.h>
 
+#include <array>
 #include <memory>
 
 #include <spork.h>
