@@ -9,15 +9,27 @@
 #include <key.h>
 #include <script/standard.h>
 
-/** Accept masternode-layer signatures made under a legacy "DarkCoin"/"Dimecoin" message magic
+/** Accept masternode-layer signatures made under an alternate "DarkCoin"/"Dimecoin" message magic
  *  in addition to the currently configured strMessageMagic.
  *
- *  Default OFF as of 2.5.5.7. strMessageMagic now matches production 2.3.0.0 again
- *  ("Dimecoin Signed Message:\n"), so the fallback is no longer needed for interoperability and
- *  leaving it on would only widen the set of signatures the masternode layer accepts. Operators
- *  running a network that still has 2.5.5.6 nodes signing under the "DarkCoin" magic can
- *  re-enable it temporarily with -legacysigmagic=1. */
-static const bool DEFAULT_LEGACY_SIG_MAGIC = false;
+ *  Default ON. The live network -- including the shipped 2.3.0.0 release and every masternode on
+ *  it -- signs with "DarkCoin Signed Message:\n", so that is what strMessageMagic must remain and
+ *  what this node signs with. Note the "Dimecoin" magic present on main was never part of the
+ *  2.3.0.0 release, so a tree built from main is NOT a valid compatibility reference.
+ *
+ *  This fallback additionally accepts the "Dimecoin" magic on verification only. That is the
+ *  first step of an accept-before-emit migration: every node must accept the new magic before any
+ *  node is allowed to emit it. Signing deliberately stays single-magic -- a node that signed the
+ *  new magic today would be invisible to the entire network and, if it were a masternode, would
+ *  stop being paid.
+ *
+ *  Verification order keeps the cost of this at zero for real traffic: the configured magic is
+ *  tried first and succeeds for all current network messages; the alternate is only attempted
+ *  after that fails. Operators can set -legacysigmagic=0 to enforce the configured magic strictly.
+ *  GetLegacyMagicAcceptCount() is the trigger for the final phase: once a release cycle passes
+ *  with a non-zero count the network has migrated, and once it is zero after the emit flip the
+ *  fallback can be deleted. */
+static const bool DEFAULT_LEGACY_SIG_MAGIC = true;
 
 /** Helper class for signing messages and checking their signatures
  */

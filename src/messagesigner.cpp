@@ -37,15 +37,16 @@ bool LegacyMagicEnabled()
     return fEnabled;
 }
 
-/** Record a signature that only verified under a legacy magic, and surface it to the operator.
- *  This is the removal trigger for the fallback: when a release cycle passes with no such log
- *  line, the network has migrated and the fallback (plus -legacysigmagic) can be deleted. */
+/** Record a signature that only verified under an alternate magic, and surface it to the operator.
+ *  With the configured magic being the one the live network signs with, this firing means some
+ *  peer is already signing under the alternate magic -- i.e. it tracks migration progress, and is
+ *  the signal used to decide when the emit flip is safe and when this fallback can be deleted. */
 void NoteLegacyMagicAccept()
 {
     const int64_t nCount = ++g_legacy_magic_accepts;
     if (nCount == 1 || nCount % 1000 == 0) {
-        LogPrintf("CMessageSigner -- WARNING: accepted %d signature(s) using a legacy message magic. "
-                  "The -legacysigmagic fallback is still required by this network; it cannot be removed yet.\n", nCount);
+        LogPrintf("CMessageSigner -- NOTICE: accepted %d signature(s) using an alternate message magic. "
+                  "Peers signing under the alternate magic exist; the -legacysigmagic fallback is still needed.\n", nCount);
     }
 }
 } // namespace
@@ -79,9 +80,9 @@ bool CMessageSigner::VerifyMessage(const CPubKey pubkey, const std::vector<unsig
         return false;
     }
 
-    // Temporary compatibility fallback for mixed networks that still sign with the older magic.
-    // Each attempt costs a full ECDSA pubkey recovery, so this only runs after the primary magic
-    // has already failed, and only for magics that differ from the configured one.
+    // Accept-before-emit compatibility fallback. Signing stays single-magic (strMessageMagic);
+    // this only widens verification. Each attempt costs a full ECDSA pubkey recovery, so it runs
+    // only after the configured magic has already failed, and only for magics that differ from it.
     const std::string kAltMagic1 = "DarkCoin Signed Message:\n";
     const std::string kAltMagic2 = "Dimecoin Signed Message:\n";
 
