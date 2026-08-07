@@ -78,7 +78,9 @@ WalletTx MakeWalletTx(CWallet& wallet, const CWalletTx& wtx)
                                                       IsMine(wallet, result.txout_address.back()) :
                                                       ISMINE_NO);
     }
-    result.credit = wtx.GetCredit(ISMINE_ALL);
+    // Coinstake transaction rows show the reward (credit - debit) even while
+    // the generated outputs are still immature and excluded from balances.
+    result.credit = wtx.IsCoinStake() ? wallet.GetCredit(*wtx.tx, ISMINE_ALL) : wtx.GetCredit(ISMINE_ALL);
     result.debit = wtx.GetDebit(ISMINE_ALL);
     result.change = wtx.GetChange();
     result.time = wtx.GetTxTime();

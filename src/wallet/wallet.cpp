@@ -2105,8 +2105,8 @@ CAmount CWalletTx::GetDebit(const isminefilter& filter) const
 
 CAmount CWalletTx::GetCredit(const isminefilter& filter) const
 {
-    // Must wait until coinbase is safely deep enough in the chain before valuing it
-    if (IsCoinBase() && GetBlocksToMaturity() > 0)
+    // Generated outputs are unavailable until they reach maturity.
+    if ((IsCoinBase() || IsCoinStake()) && GetBlocksToMaturity() > 0)
         return 0;
 
     CAmount credit = 0;
@@ -2155,8 +2155,8 @@ CAmount CWalletTx::GetAvailableCredit(bool fUseCache, const isminefilter& filter
     if (pwallet == nullptr)
         return 0;
 
-    // Must wait until coinbase is safely deep enough in the chain before valuing it
-    if (IsCoinBase() && GetBlocksToMaturity() > 0)
+    // Generated outputs are unavailable until they reach maturity.
+    if ((IsCoinBase() || IsCoinStake()) && GetBlocksToMaturity() > 0)
         return 0;
 
     CAmount* cache = nullptr;
@@ -2197,7 +2197,7 @@ CAmount CWalletTx::GetAvailableCredit(bool fUseCache, const isminefilter& filter
 
 CAmount CWalletTx::GetImmatureWatchOnlyCredit(const bool fUseCache) const
 {
-    if (IsCoinBase() && GetBlocksToMaturity() > 0 && IsInMainChain())
+    if ((IsCoinBase() || IsCoinStake()) && GetBlocksToMaturity() > 0 && IsInMainChain())
     {
         if (fUseCache && fImmatureWatchCreditCached)
             return nImmatureWatchCreditCached;
@@ -4156,7 +4156,7 @@ std::map<CTxDestination, CAmount> CWallet::GetAddressBalances()
             if (!pcoin->IsTrusted())
                 continue;
 
-            if (pcoin->IsCoinBase() && pcoin->GetBlocksToMaturity() > 0)
+            if ((pcoin->IsCoinBase() || pcoin->IsCoinStake()) && pcoin->GetBlocksToMaturity() > 0)
                 continue;
 
             int nDepth = pcoin->GetDepthInMainChain();

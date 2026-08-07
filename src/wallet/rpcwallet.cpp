@@ -2370,7 +2370,9 @@ static UniValue gettransaction(const JSONRPCRequest& request)
     }
     const CWalletTx& wtx = it->second;
 
-    CAmount nCredit = wtx.GetCredit(filter);
+    // Preserve transaction accounting for immature coinstakes. Their outputs
+    // remain excluded from the wallet's available balance until maturity.
+    CAmount nCredit = wtx.IsCoinStake() ? pwallet->GetCredit(*wtx.tx, filter) : wtx.GetCredit(filter);
     CAmount nDebit = wtx.GetDebit(filter);
     CAmount nNet = nCredit - nDebit;
     CAmount nFee = (wtx.IsFromMe(filter) ? wtx.tx->GetValueOut() - nDebit : 0);
